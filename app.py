@@ -625,12 +625,12 @@ if uploaded_file is not None:
 
                     col1.metric(
                         "RMSE",
-                        f"{rmse:,.2f}"
+                        f"{rmse:, Rp,.2f}"
                     )
 
                     col2.metric(
                         "MAE",
-                        f"{mae:,.2f}"
+                        f"{mae:,Rp,.2f}"
                     )
 
                     col3.metric(
