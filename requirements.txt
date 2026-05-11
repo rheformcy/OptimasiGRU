@@ -1,4 +1,1 @@
-tensorflow
 streamlit
-pandas
-numpy
