@@ -1,3 +1,9 @@
+# ======================================================
+# LIBRARY
+# ======================================================
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -59,8 +65,8 @@ st.set_page_config(
 st.markdown("""
 # 📊 Optimasi Gated Recurrent Unit (GRU)
 
-### Rhena Amelia Shafitry  
-Statistika UNDIP  
+### Rhena Amelia Shafitry
+Statistika UNDIP
 24050122120019
 """)
 
@@ -95,7 +101,17 @@ menu = st.sidebar.radio(
 )
 
 # ======================================================
-# PARAMETER UMUM
+# SESSION STATE MENU
+# ======================================================
+if "menu_state" not in st.session_state:
+    st.session_state.menu_state = menu
+
+st.session_state.menu_state = menu
+
+menu = st.session_state.menu_state
+
+# ======================================================
+# PARAMETER
 # ======================================================
 st.sidebar.header("⚙️ Parameter Model")
 
@@ -107,29 +123,26 @@ timestep = st.sidebar.number_input(
 )
 
 # ======================================================
-# PARAMETER PSO
+# PSO PARAMETER
 # ======================================================
 st.sidebar.header("🚀 Parameter PSO")
 
 particle = st.sidebar.number_input(
     "Jumlah Partikel",
     min_value=1,
-    max_value=100,
     value=5
 )
 
 iterasi = st.sidebar.number_input(
     "Jumlah Iterasi",
     min_value=1,
-    max_value=100,
     value=3
 )
 
 epoch = st.sidebar.number_input(
     "Epoch Final Training",
     min_value=1,
-    max_value=500,
-    value=30
+    value=100
 )
 
 layer = st.sidebar.number_input(
@@ -157,7 +170,7 @@ units_max = st.sidebar.number_input(
 )
 
 # ======================================================
-# RANGE LEARNING RATE
+# RANGE LR
 # ======================================================
 st.sidebar.subheader("Range Learning Rate")
 
@@ -178,7 +191,7 @@ lr_max = st.sidebar.number_input(
 )
 
 # ======================================================
-# RANGE BATCH SIZE
+# RANGE BATCH
 # ======================================================
 st.sidebar.subheader("Range Batch Size")
 
@@ -216,25 +229,14 @@ dropout_max = st.sidebar.slider(
 )
 
 # ======================================================
-# WARNING
+# CACHE DATA
 # ======================================================
-if units_max > 128:
-    st.sidebar.warning(
-        "Units terlalu besar dapat memperlambat training"
-    )
-
-if layer > 2:
-    st.sidebar.warning(
-        "Layer tinggi dapat memperlambat training"
-    )
-
-if epoch > 100:
-    st.sidebar.warning(
-        "Epoch besar dapat memperlambat proses"
-    )
+@st.cache_data
+def load_data(file):
+    return pd.read_excel(file)
 
 # ======================================================
-# MAIN PROGRAM
+# MAIN
 # ======================================================
 if uploaded_file is not None:
 
@@ -243,7 +245,7 @@ if uploaded_file is not None:
         # ==================================================
         # LOAD DATA
         # ==================================================
-        df = pd.read_excel(uploaded_file)
+        df = load_data(uploaded_file)
 
         df.columns = df.columns.str.strip()
 
@@ -294,31 +296,19 @@ if uploaded_file is not None:
 
             st.subheader("📈 Visualisasi Time Series Plot")
 
-            if (
-                "Tanggal" in df.columns and
-                "Terakhir" in df.columns
-            ):
+            fig, ax = plt.subplots(
+                figsize=(12, 5)
+            )
 
-                fig, ax = plt.subplots(
-                    figsize=(12, 5)
-                )
+            ax.plot(
+                pd.to_datetime(df["Tanggal"]).dt.date,
+                df["Terakhir"],
+                linewidth=2
+            )
 
-                ax.plot(
-                    pd.to_datetime(
-                        df["Tanggal"]
-                    ).dt.date,
+            ax.grid(alpha=0.3)
 
-                    df["Terakhir"],
-                    linewidth=2
-                )
-
-                ax.set_title(
-                    "Time Series Harga"
-                )
-
-                ax.grid(alpha=0.3)
-
-                st.pyplot(fig)
+            st.pyplot(fig)
 
         # ==================================================
         # MISSING VALUE
@@ -328,12 +318,8 @@ if uploaded_file is not None:
             st.subheader("🧩 Missing Values")
 
             missing_df = pd.DataFrame({
-
-                "Kolom":
-                df.columns,
-
-                "Jumlah Missing":
-                df.isnull().sum().values
+                "Kolom": df.columns,
+                "Jumlah Missing": df.isnull().sum().values
             })
 
             st.dataframe(
@@ -348,84 +334,50 @@ if uploaded_file is not None:
 
             st.subheader("🚨 Deteksi Outlier")
 
-            if "Terakhir" in df.columns:
+            Q1 = df["Terakhir"].quantile(0.25)
+            Q3 = df["Terakhir"].quantile(0.75)
 
-                Q1 = df["Terakhir"].quantile(0.25)
+            IQR = Q3 - Q1
 
-                Q3 = df["Terakhir"].quantile(0.75)
+            lower = Q1 - 1.5 * IQR
+            upper = Q3 + 1.5 * IQR
 
-                IQR = Q3 - Q1
+            outliers = df[
+                (df["Terakhir"] < lower) |
+                (df["Terakhir"] > upper)
+            ]
 
-                lower = Q1 - 1.5 * IQR
+            st.write(
+                f"Jumlah Outlier: {len(outliers)}"
+            )
 
-                upper = Q3 + 1.5 * IQR
-
-                outliers = df[
-                    (
-                        df["Terakhir"] < lower
-                    ) |
-                    (
-                        df["Terakhir"] > upper
-                    )
-                ]
-
-                st.write(
-                    f"Jumlah Outlier: {len(outliers)}"
-                )
-
-                st.dataframe(
-                    outliers,
-                    use_container_width=True
-                )
+            st.dataframe(
+                outliers,
+                use_container_width=True
+            )
 
         # ==================================================
-        # BASELINE MODEL
+        # BASELINE
         # ==================================================
         elif menu == "Baseline Model (GRU-Adam)":
 
-            st.subheader(
-                "🤖 Baseline Model (GRU-Adam)"
+            run_baseline = st.button(
+                "Start Baseline Training"
             )
 
-            if "Terakhir" not in df.columns:
-
-                st.warning(
-                    "Kolom 'Terakhir' tidak ditemukan."
-                )
-
-            else:
+            if run_baseline:
 
                 with st.spinner(
                     "Training baseline GRU..."
                 ):
 
-                    clear_session()
-                    gc.collect()
-
-                    # ======================================
-                    # SEED
-                    # ======================================
                     SEED = 49
 
                     random.seed(SEED)
                     np.random.seed(SEED)
                     tf.random.set_seed(SEED)
 
-                    # ======================================
-                    # PARAMETER FIXED
-                    # ======================================
-                    GS_epoch = 100
-                    GS_batch = 64
-                    GS_units = 50
-                    GS_dropout = 0.3
-                    GS_lr = 0.0001
-
-                    # ======================================
-                    # DATA
-                    # ======================================
-                    values = df[
-                        ['Terakhir']
-                    ].values.astype(float)
+                    values = df[['Terakhir']].values.astype(float)
 
                     n = len(values)
 
@@ -440,15 +392,10 @@ if uploaded_file is not None:
                     X = []
                     y = []
 
-                    for i in range(
-                        timestep,
-                        len(scaled_data)
-                    ):
+                    for i in range(timestep, len(scaled_data)):
 
                         X.append(
-                            scaled_data[
-                                i-timestep:i
-                            ]
+                            scaled_data[i-timestep:i]
                         )
 
                         y.append(
@@ -467,37 +414,27 @@ if uploaded_file is not None:
                     y_test = y[split_idx:]
 
                     X_train = X_train.reshape(
-                        (
-                            X_train.shape[0],
-                            X_train.shape[1],
-                            1
-                        )
+                        X_train.shape[0],
+                        X_train.shape[1],
+                        1
                     )
 
                     X_test = X_test.reshape(
-                        (
-                            X_test.shape[0],
-                            X_test.shape[1],
-                            1
-                        )
+                        X_test.shape[0],
+                        X_test.shape[1],
+                        1
                     )
 
-                    # ======================================
-                    # MODEL
-                    # ======================================
                     model = Sequential([
                         Input(shape=(timestep, 1)),
-                        GRU(
-                            units=GS_units,
-                            activation='tanh'
-                        ),
-                        Dropout(GS_dropout),
+                        GRU(units=50, activation='tanh'),
+                        Dropout(0.3),
                         Dense(1)
                     ])
 
                     model.compile(
                         optimizer=Adam(
-                            learning_rate=GS_lr
+                            learning_rate=0.0001
                         ),
                         loss='mse'
                     )
@@ -505,19 +442,13 @@ if uploaded_file is not None:
                     history = model.fit(
                         X_train,
                         y_train,
-                        epochs=GS_epoch,
-                        batch_size=GS_batch,
+                        epochs=100,
+                        batch_size=64,
                         validation_split=0.2,
+                        shuffle=False,
                         verbose=0
                     )
 
-                    st.write(
-                        "✅ Baseline training selesai"
-                    )
-
-                    # ======================================
-                    # PREDIKSI
-                    # ======================================
                     y_pred_scaled = model.predict(
                         X_test,
                         verbose=0
@@ -528,12 +459,9 @@ if uploaded_file is not None:
                     ).flatten()
 
                     y_actual = scaler.inverse_transform(
-                        y_test.reshape(-1, 1)
+                        y_test.reshape(-1,1)
                     ).flatten()
 
-                    # ======================================
-                    # METRICS
-                    # ======================================
                     rmse = np.sqrt(
                         mean_squared_error(
                             y_actual,
@@ -570,65 +498,8 @@ if uploaded_file is not None:
                         f"{mape:.4f}%"
                     )
 
-                    # ======================================
-                    # LOSS
-                    # ======================================
-                    st.subheader(
-                        "📉 Training vs Validation Loss"
-                    )
-
-                    fig1, ax1 = plt.subplots(
-                        figsize=(10, 5)
-                    )
-
-                    ax1.plot(
-                        history.history['loss'],
-                        label='Training Loss'
-                    )
-
-                    ax1.plot(
-                        history.history['val_loss'],
-                        label='Validation Loss'
-                    )
-
-                    ax1.legend()
-
-                    ax1.grid(alpha=0.3)
-
-                    st.pyplot(fig1)
-
-                    # ======================================
-                    # AKTUAL VS PREDIKSI
-                    # ======================================
-                    st.subheader(
-                        "📈 Aktual vs Prediksi"
-                    )
-
-                    fig2, ax2 = plt.subplots(
-                        figsize=(12, 6)
-                    )
-
-                    ax2.plot(
-                        y_actual,
-                        label='Aktual'
-                    )
-
-                    ax2.plot(
-                        y_pred,
-                        label='Prediksi'
-                    )
-
-                    ax2.legend()
-
-                    ax2.grid(alpha=0.3)
-
-                    st.pyplot(fig2)
-
-                    clear_session()
-                    gc.collect()
-
                     st.success(
-                        "Baseline GRU berhasil!"
+                        "Baseline berhasil!"
                     )
 
         # ==================================================
@@ -636,40 +507,23 @@ if uploaded_file is not None:
         # ==================================================
         elif menu == "Optimasi GRU-PSO":
 
-            st.subheader(
-                "🚀 Optimasi GRU-PSO"
+            run_pso = st.button(
+                "Start Optimasi GRU-PSO"
             )
 
-            if "Terakhir" not in df.columns:
-
-                st.warning(
-                    "Kolom 'Terakhir' tidak ditemukan."
-                )
-
-            else:
+            if run_pso:
 
                 with st.spinner(
-                    "Proses optimasi GRU-PSO..."
+                    "Optimasi sedang berjalan..."
                 ):
 
-                    clear_session()
-                    gc.collect()
-
-                    # ======================================
-                    # SEED
-                    # ======================================
                     SEED = 49
 
                     random.seed(SEED)
                     np.random.seed(SEED)
                     tf.random.set_seed(SEED)
 
-                    # ======================================
-                    # DATA
-                    # ======================================
-                    values = df[
-                        ['Terakhir']
-                    ].values.astype(float)
+                    values = df[['Terakhir']].values.astype(float)
 
                     n = len(values)
 
@@ -684,15 +538,10 @@ if uploaded_file is not None:
                     X = []
                     y = []
 
-                    for i in range(
-                        timestep,
-                        len(scaled_data)
-                    ):
+                    for i in range(timestep, len(scaled_data)):
 
                         X.append(
-                            scaled_data[
-                                i-timestep:i
-                            ]
+                            scaled_data[i-timestep:i]
                         )
 
                         y.append(
@@ -711,24 +560,17 @@ if uploaded_file is not None:
                     y_test = y[split_idx:]
 
                     X_train = X_train.reshape(
-                        (
-                            X_train.shape[0],
-                            X_train.shape[1],
-                            1
-                        )
+                        X_train.shape[0],
+                        X_train.shape[1],
+                        1
                     )
 
                     X_test = X_test.reshape(
-                        (
-                            X_test.shape[0],
-                            X_test.shape[1],
-                            1
-                        )
+                        X_test.shape[0],
+                        X_test.shape[1],
+                        1
                     )
 
-                    # ======================================
-                    # VALIDATION
-                    # ======================================
                     val_size = 0.2
 
                     train_size = int(
@@ -741,9 +583,6 @@ if uploaded_file is not None:
                     X_val = X_train[train_size:]
                     y_val = y_train[train_size:]
 
-                    # ======================================
-                    # PSO OPTIONS
-                    # ======================================
                     options = {
                         'c1': 2.0,
                         'c2': 2.0,
@@ -767,7 +606,7 @@ if uploaded_file is not None:
                     )
 
                     # ======================================
-                    # FITNESS FUNCTION
+                    # FITNESS
                     # ======================================
                     def objective_function(particles):
 
@@ -775,60 +614,19 @@ if uploaded_file is not None:
 
                         losses = np.zeros(n_particles)
 
-                        for i, particle_i in enumerate(
-                            particles
-                        ):
+                        for i, p in enumerate(particles):
+
+                            units_p = int(np.round(p[0]))
+                            lr_p = float(p[1])
+                            batch_p = int(np.round(p[2]))
+                            dropout_p = float(p[3])
 
                             try:
 
-                                units_p = int(
-                                    np.round(
-                                        particle_i[0]
-                                    )
-                                )
-
-                                lr_p = float(
-                                    particle_i[1]
-                                )
-
-                                batch_p = int(
-                                    np.round(
-                                        particle_i[2]
-                                    )
-                                )
-
-                                dropout_p = float(
-                                    particle_i[3]
-                                )
-
-                                units_p = max(
-                                    1,
-                                    units_p
-                                )
-
-                                batch_p = max(
-                                    1,
-                                    batch_p
-                                )
-
-                                dropout_p = min(
-                                    max(
-                                        dropout_p,
-                                        0.0
-                                    ),
-                                    0.9
-                                )
-
                                 clear_session()
-                                gc.collect()
 
-                                tf.random.set_seed(
-                                    SEED
-                                )
+                                tf.random.set_seed(SEED)
 
-                                # ==========================
-                                # MODEL
-                                # ==========================
                                 model = Sequential()
 
                                 model.add(
@@ -862,14 +660,10 @@ if uploaded_file is not None:
                                         )
 
                                     model.add(
-                                        Dropout(
-                                            dropout_p
-                                        )
+                                        Dropout(dropout_p)
                                     )
 
-                                model.add(
-                                    Dense(1)
-                                )
+                                model.add(Dense(1))
 
                                 model.compile(
                                     optimizer=Adam(
@@ -878,14 +672,12 @@ if uploaded_file is not None:
                                     loss='mse'
                                 )
 
-                                # ==========================
-                                # FIT IDENTIK GCOLAB
-                                # ==========================
                                 model.fit(
                                     X_tr,
                                     y_tr,
                                     epochs=10,
                                     batch_size=batch_p,
+                                    shuffle=False,
                                     verbose=0
                                 )
 
@@ -899,7 +691,7 @@ if uploaded_file is not None:
                                 ).flatten()
 
                                 actual_inv = scaler.inverse_transform(
-                                    y_val.reshape(-1, 1)
+                                    y_val.reshape(-1,1)
                                 ).flatten()
 
                                 mse = mean_squared_error(
@@ -912,20 +704,12 @@ if uploaded_file is not None:
                                 clear_session()
                                 gc.collect()
 
-                            except Exception as e:
-
-                                print(
-                                    "ERROR :",
-                                    e
-                                )
+                            except:
 
                                 losses[i] = 1e12
 
                         return losses
 
-                    # ======================================
-                    # OPTIMIZER
-                    # ======================================
                     optimizer = ps.single.GlobalBestPSO(
                         n_particles=particle,
                         dimensions=4,
@@ -938,20 +722,11 @@ if uploaded_file is not None:
                         iters=iterasi
                     )
 
-                    st.write(
-                        "✅ PSO selesai"
-                    )
-
-                    # ======================================
-                    # BEST PARAMETER
-                    # ======================================
                     best_units = int(
                         np.round(best_pos[0])
                     )
 
-                    best_lr = float(
-                        best_pos[1]
-                    )
+                    best_lr = float(best_pos[1])
 
                     best_batch = int(
                         np.round(best_pos[2])
@@ -965,7 +740,6 @@ if uploaded_file is not None:
                     # FINAL MODEL
                     # ======================================
                     clear_session()
-                    gc.collect()
 
                     tf.random.set_seed(SEED)
 
@@ -974,8 +748,8 @@ if uploaded_file is not None:
                     model_final.add(
                         Input(
                             shape=(
-                                timestep,
-                                1
+                                X_train.shape[1],
+                                X_train.shape[2]
                             )
                         )
                     )
@@ -1014,26 +788,16 @@ if uploaded_file is not None:
                         loss='mse'
                     )
 
-                    # ======================================
-                    # FINAL TRAINING
-                    # IDENTIK GCOLAB
-                    # ======================================
                     history = model_final.fit(
                         X_train,
                         y_train,
                         epochs=epoch,
                         batch_size=best_batch,
                         validation_split=0.2,
+                        shuffle=False,
                         verbose=0
                     )
 
-                    st.write(
-                        "✅ Final training selesai"
-                    )
-
-                    # ======================================
-                    # PREDIKSI
-                    # ======================================
                     y_pred_scaled = model_final.predict(
                         X_test,
                         verbose=0
@@ -1044,12 +808,9 @@ if uploaded_file is not None:
                     ).flatten()
 
                     y_actual = scaler.inverse_transform(
-                        y_test.reshape(-1, 1)
+                        y_test.reshape(-1,1)
                     ).flatten()
 
-                    # ======================================
-                    # METRICS
-                    # ======================================
                     rmse = np.sqrt(
                         mean_squared_error(
                             y_actual,
@@ -1127,20 +888,12 @@ if uploaded_file is not None:
                     )
 
                     fig1, ax1 = plt.subplots(
-                        figsize=(10, 5)
+                        figsize=(10,5)
                     )
 
                     ax1.plot(
                         optimizer.cost_history,
                         marker='o'
-                    )
-
-                    ax1.set_xlabel(
-                        "Iterasi"
-                    )
-
-                    ax1.set_ylabel(
-                        "Best MSE"
                     )
 
                     ax1.grid(alpha=0.3)
@@ -1155,7 +908,7 @@ if uploaded_file is not None:
                     )
 
                     fig2, ax2 = plt.subplots(
-                        figsize=(10, 5)
+                        figsize=(10,5)
                     )
 
                     ax2.plot(
@@ -1175,14 +928,14 @@ if uploaded_file is not None:
                     st.pyplot(fig2)
 
                     # ======================================
-                    # AKTUAL VS PREDIKSI
+                    # PREDIKSI
                     # ======================================
                     st.subheader(
                         "📈 Aktual vs Prediksi"
                     )
 
                     fig3, ax3 = plt.subplots(
-                        figsize=(12, 6)
+                        figsize=(12,6)
                     )
 
                     ax3.plot(
@@ -1201,9 +954,6 @@ if uploaded_file is not None:
 
                     st.pyplot(fig3)
 
-                    clear_session()
-                    gc.collect()
-
                     st.success(
                         "Optimasi GRU-PSO berhasil!"
                     )
@@ -1211,11 +961,11 @@ if uploaded_file is not None:
     except Exception as e:
 
         st.error(
-            f"❌ Terjadi error: {e}"
+            f"❌ Error: {e}"
         )
 
 else:
 
     st.info(
-        "📂 Silakan upload file Excel terlebih dahulu."
+        "📂 Upload dataset terlebih dahulu."
     )
