@@ -1,5 +1,3 @@
-
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -48,14 +46,14 @@ import pyswarms as ps
 # ======================================================
 # CLEAR SESSION
 # ======================================================
-tf.keras.backend.clear_session()
+clear_session()
 gc.collect()
 
 # ======================================================
 # KONFIGURASI HALAMAN
 # ======================================================
 st.set_page_config(
-    page_title="Optimasi GRU",
+    page_title="Optimasi GRU-PSO",
     layout="wide"
 )
 
@@ -73,7 +71,7 @@ Statistika UNDIP
 st.divider()
 
 # ======================================================
-# SIDEBAR - UPLOAD FILE
+# SIDEBAR UPLOAD
 # ======================================================
 st.sidebar.header("📂 Upload Dataset")
 
@@ -101,9 +99,9 @@ menu = st.sidebar.radio(
 )
 
 # ======================================================
-# PARAMETER BASELINE
+# PARAMETER UMUM
 # ======================================================
-st.sidebar.header("⚙️ Parameter Baseline")
+st.sidebar.header("⚙️ Parameter Model")
 
 timestep = st.sidebar.number_input(
     "Timestep / Window Size",
@@ -136,7 +134,7 @@ epoch = st.sidebar.number_input(
 )
 
 layer = st.sidebar.number_input(
-    "Jumlah Layer",
+    "Jumlah Layer GRU",
     min_value=1,
     max_value=3,
     value=1
@@ -181,7 +179,7 @@ lr_max = st.sidebar.number_input(
 )
 
 # ======================================================
-# RANGE BATCH
+# RANGE BATCH SIZE
 # ======================================================
 st.sidebar.subheader("Range Batch Size")
 
@@ -219,7 +217,7 @@ dropout_max = st.sidebar.slider(
 )
 
 # ======================================================
-# MAIN
+# MAIN PROGRAM
 # ======================================================
 if uploaded_file is not None:
 
@@ -245,7 +243,7 @@ if uploaded_file is not None:
         )
 
         # ==================================================
-        # PREVIEW
+        # PREVIEW DATASET
         # ==================================================
         if menu == "Preview Dataset":
 
@@ -257,13 +255,11 @@ if uploaded_file is not None:
             )
 
         # ==================================================
-        # DESKRIPTIF
+        # STATISTIKA DESKRIPTIF
         # ==================================================
         elif menu == "Statistika Deskriptif":
 
-            st.subheader(
-                "📊 Statistika Deskriptif"
-            )
+            st.subheader("📊 Statistika Deskriptif")
 
             numeric_df = df.select_dtypes(
                 include=['int64', 'float64']
@@ -279,9 +275,7 @@ if uploaded_file is not None:
         # ==================================================
         elif menu == "Visualisasi Time Series Plot":
 
-            st.subheader(
-                "📈 Visualisasi Time Series Plot"
-            )
+            st.subheader("📈 Visualisasi Time Series Plot")
 
             if (
                 "Tanggal" in df.columns and
@@ -314,9 +308,7 @@ if uploaded_file is not None:
         # ==================================================
         elif menu == "Cek Missing Values":
 
-            st.subheader(
-                "🧩 Missing Values"
-            )
+            st.subheader("🧩 Missing Values")
 
             missing_df = pd.DataFrame({
 
@@ -337,9 +329,7 @@ if uploaded_file is not None:
         # ==================================================
         elif menu == "Cek Outliers":
 
-            st.subheader(
-                "🚨 Deteksi Outlier"
-            )
+            st.subheader("🚨 Deteksi Outlier")
 
             if "Terakhir" in df.columns:
 
@@ -376,9 +366,7 @@ if uploaded_file is not None:
         # ==================================================
         elif menu == "Baseline Model (GRU-Adam)":
 
-            st.subheader(
-                "🤖 Baseline Model (GRU-Adam)"
-            )
+            st.subheader("🤖 Baseline Model (GRU-Adam)")
 
             if "Terakhir" not in df.columns:
 
@@ -393,19 +381,7 @@ if uploaded_file is not None:
                 ):
 
                     clear_session()
-
                     gc.collect()
-
-                    # ======================================
-                    # FIXED PARAMETER
-                    # ======================================
-                    GS_epoch = 100
-                    GS_batch = 64
-                    GS_units = 50
-                    GS_layers = 1
-                    GS_dropout = 0.2
-                    GS_lr = 0.0001
-                    GS_window = timestep
 
                     # ======================================
                     # SEED
@@ -413,50 +389,41 @@ if uploaded_file is not None:
                     SEED = 49
 
                     random.seed(SEED)
-
                     np.random.seed(SEED)
-
                     tf.random.set_seed(SEED)
+
+                    # ======================================
+                    # PARAMETER
+                    # ======================================
+                    GS_epoch = 100
+                    GS_batch = 64
+                    GS_units = 50
+                    GS_dropout = 0.2
+                    GS_lr = 0.0001
 
                     # ======================================
                     # DATA
                     # ======================================
-                    values = df[
-                        ['Terakhir']
-                    ].values
+                    values = df[['Terakhir']].values.astype(float)
 
                     n = len(values)
 
                     n_train = int(n * 0.8)
 
-                    # ======================================
-                    # SCALING
-                    # ======================================
                     scaler = MinMaxScaler()
 
-                    scaler.fit(
-                        values[:n_train]
-                    )
+                    scaler.fit(values[:n_train])
 
-                    scaled_data = scaler.transform(
-                        values
-                    )
+                    scaled_data = scaler.transform(values)
 
-                    # ======================================
-                    # WINDOWING
-                    # ======================================
                     X = []
-
                     y = []
 
-                    for i in range(
-                        GS_window,
-                        len(scaled_data)
-                    ):
+                    for i in range(timestep, len(scaled_data)):
 
                         X.append(
                             scaled_data[
-                                i-GS_window:i
+                                i-timestep:i
                             ]
                         )
 
@@ -465,24 +432,16 @@ if uploaded_file is not None:
                         )
 
                     X = np.array(X)
-
                     y = np.array(y)
 
-                    split_idx = (
-                        n_train - GS_window
-                    )
+                    split_idx = n_train - timestep
 
                     X_train = X[:split_idx]
-
                     y_train = y[:split_idx]
 
                     X_test = X[split_idx:]
-
                     y_test = y[split_idx:]
 
-                    # ======================================
-                    # RESHAPE
-                    # ======================================
                     X_train = X_train.reshape(
                         (
                             X_train.shape[0],
@@ -506,10 +465,7 @@ if uploaded_file is not None:
 
                     model.add(
                         Input(
-                            shape=(
-                                GS_window,
-                                1
-                            )
+                            shape=(timestep, 1)
                         )
                     )
 
@@ -526,9 +482,6 @@ if uploaded_file is not None:
 
                     model.add(Dense(1))
 
-                    # ======================================
-                    # COMPILE
-                    # ======================================
                     model.compile(
                         optimizer=Adam(
                             learning_rate=GS_lr
@@ -536,18 +489,12 @@ if uploaded_file is not None:
                         loss='mse'
                     )
 
-                    # ======================================
-                    # EARLY STOPPING
-                    # ======================================
                     early_stop = EarlyStopping(
                         monitor='val_loss',
                         patience=5,
                         restore_best_weights=True
                     )
 
-                    # ======================================
-                    # TRAINING
-                    # ======================================
                     history = model.fit(
                         X_train,
                         y_train,
@@ -679,511 +626,544 @@ if uploaded_file is not None:
         # ==================================================
         elif menu == "Optimasi GRU-PSO":
 
-            st.subheader(
-                "🚀 Optimasi GRU-PSO"
-            )
+            st.subheader("🚀 Optimasi GRU-PSO")
 
-            with st.spinner(
-                "Proses optimasi..."
-            ):
+            if "Terakhir" not in df.columns:
 
-                clear_session()
+                st.warning(
+                    "Kolom 'Terakhir' tidak ditemukan."
+                )
 
-                gc.collect()
+            else:
 
-                # ======================================
-                # SEED
-                # ======================================
-                SEED = 987
-
-                random.seed(SEED)
-
-                np.random.seed(SEED)
-
-                tf.random.set_seed(SEED)
-
-                # ======================================
-                # DATA
-                # ======================================
-                values = df[
-                    ['Terakhir']
-                ].values
-
-                n = len(values)
-
-                n_train = int(n * 0.8)
-
-                # ======================================
-                # SCALING
-                # ======================================
-                scaler = MinMaxScaler()
-
-                scaler.fit(values[:n_train])
-
-                scaled_data = scaler.transform(values)
-
-                # ======================================
-                # WINDOWING
-                # ======================================
-                X = []
-
-                y = []
-
-                for i in range(
-                    timestep,
-                    len(scaled_data)
+                with st.spinner(
+                    "Proses optimasi GRU-PSO..."
                 ):
 
-                    X.append(
-                        scaled_data[
-                            i-timestep:i
-                        ]
+                    clear_session()
+                    gc.collect()
+
+                    # ======================================
+                    # SEED
+                    # ======================================
+                    SEED = 49
+
+                    random.seed(SEED)
+                    np.random.seed(SEED)
+                    tf.random.set_seed(SEED)
+
+                    # ======================================
+                    # DATA
+                    # ======================================
+                    values = df[['Terakhir']].values.astype(float)
+
+                    n = len(values)
+
+                    n_train = int(n * 0.8)
+
+                    # ======================================
+                    # SCALING
+                    # ======================================
+                    scaler = MinMaxScaler()
+
+                    scaler.fit(values[:n_train])
+
+                    scaled_data = scaler.transform(values)
+
+                    # ======================================
+                    # WINDOWING
+                    # ======================================
+                    X = []
+                    y = []
+
+                    for i in range(timestep, len(scaled_data)):
+
+                        X.append(
+                            scaled_data[
+                                i-timestep:i
+                            ]
+                        )
+
+                        y.append(
+                            scaled_data[i]
+                        )
+
+                    X = np.array(X)
+                    y = np.array(y)
+
+                    split_idx = n_train - timestep
+
+                    X_train = X[:split_idx]
+                    y_train = y[:split_idx]
+
+                    X_test = X[split_idx:]
+                    y_test = y[split_idx:]
+
+                    X_train = X_train.reshape(
+                        (
+                            X_train.shape[0],
+                            X_train.shape[1],
+                            1
+                        )
                     )
 
-                    y.append(
-                        scaled_data[i]
+                    X_test = X_test.reshape(
+                        (
+                            X_test.shape[0],
+                            X_test.shape[1],
+                            1
+                        )
                     )
 
-                X = np.array(X)
+                    # ======================================
+                    # VALIDATION
+                    # ======================================
+                    val_size = 0.2
 
-                y = np.array(y)
-
-                split_idx = (
-                    n_train - timestep
-                )
-
-                X_train = X[:split_idx]
-
-                y_train = y[:split_idx]
-
-                X_test = X[split_idx:]
-
-                y_test = y[split_idx:]
-
-                # ======================================
-                # RESHAPE
-                # ======================================
-                X_train = X_train.reshape(
-                    (
-                        X_train.shape[0],
-                        X_train.shape[1],
-                        1
-                    )
-                )
-
-                X_test = X_test.reshape(
-                    (
-                        X_test.shape[0],
-                        X_test.shape[1],
-                        1
-                    )
-                )
-
-                # ======================================
-                # VALIDATION
-                # ======================================
-                val_size = 0.2
-
-                train_size = int(
-                    len(X_train) * (1 - val_size)
-                )
-
-                X_tr = X_train[:train_size]
-
-                y_tr = y_train[:train_size]
-
-                X_val = X_train[train_size:]
-
-                y_val = y_train[train_size:]
-
-                # ======================================
-                # PSO OPTIONS
-                # ======================================
-                options = {
-                    'c1': 2.0,
-                    'c2': 2.0,
-                    'w': 0.7
-                }
-
-                bounds = (
-                    [
-                        units_min,
-                        lr_min,
-                        batch_min,
-                        dropout_min
-                    ],
-
-                    [
-                        units_max,
-                        lr_max,
-                        batch_max,
-                        dropout_max
-                    ]
-                )
-
-                # ======================================
-                # FITNESS FUNCTION
-                # ======================================
-                def objective_function(
-                    particles
-                ):
-
-                    n_particles = (
-                        particles.shape[0]
+                    train_size = int(
+                        len(X_train) * (1 - val_size)
                     )
 
-                    losses = np.zeros(
-                        n_particles
+                    X_tr = X_train[:train_size]
+                    y_tr = y_train[:train_size]
+
+                    X_val = X_train[train_size:]
+                    y_val = y_train[train_size:]
+
+                    # ======================================
+                    # OPTIONS PSO
+                    # ======================================
+                    options = {
+                        'c1': 2.0,
+                        'c2': 2.0,
+                        'w': 0.7
+                    }
+
+                    bounds = (
+                        np.array([
+                            units_min,
+                            lr_min,
+                            batch_min,
+                            dropout_min
+                        ]),
+
+                        np.array([
+                            units_max,
+                            lr_max,
+                            batch_max,
+                            dropout_max
+                        ])
                     )
 
-                    for i, particle_i in enumerate(
-                        particles
-                    ):
+                    # ======================================
+                    # FITNESS FUNCTION
+                    # ======================================
+                    def objective_function(particles):
 
-                        try:
+                        n_particles = particles.shape[0]
 
-                            units_p = int(
-                                np.round(
-                                    particle_i[0]
+                        losses = np.zeros(n_particles)
+
+                        for i, particle_i in enumerate(particles):
+
+                            try:
+
+                                units_p = int(
+                                    np.round(particle_i[0])
                                 )
-                            )
 
-                            lr_p = float(
-                                particle_i[1]
-                            )
-
-                            batch_p = int(
-                                np.round(
-                                    particle_i[2]
+                                lr_p = float(
+                                    particle_i[1]
                                 )
-                            )
 
-                            dropout_p = float(
-                                particle_i[3]
-                            )
+                                batch_p = int(
+                                    np.round(particle_i[2])
+                                )
 
-                            clear_session()
+                                dropout_p = float(
+                                    particle_i[3]
+                                )
 
-                            model = Sequential()
+                                units_p = max(1, units_p)
 
-                            model.add(
-                                Input(
-                                    shape=(
-                                        timestep,
-                                        1
+                                batch_p = max(1, batch_p)
+
+                                dropout_p = min(
+                                    max(dropout_p, 0.0),
+                                    0.9
+                                )
+
+                                clear_session()
+
+                                tf.random.set_seed(SEED)
+
+                                # ==============================
+                                # MODEL
+                                # ==============================
+                                model = Sequential()
+
+                                model.add(
+                                    Input(
+                                        shape=(
+                                            timestep,
+                                            1
+                                        )
                                     )
                                 )
+
+                                for l in range(layer):
+
+                                    if l < layer - 1:
+
+                                        model.add(
+                                            GRU(
+                                                units=units_p,
+                                                activation='tanh',
+                                                return_sequences=True
+                                            )
+                                        )
+
+                                    else:
+
+                                        model.add(
+                                            GRU(
+                                                units=units_p,
+                                                activation='tanh'
+                                            )
+                                        )
+
+                                    model.add(
+                                        Dropout(dropout_p)
+                                    )
+
+                                model.add(Dense(1))
+
+                                model.compile(
+                                    optimizer=Adam(
+                                        learning_rate=lr_p
+                                    ),
+                                    loss='mse'
+                                )
+
+                                early_stop = EarlyStopping(
+                                    monitor='val_loss',
+                                    patience=3,
+                                    restore_best_weights=True
+                                )
+
+                                model.fit(
+                                    X_tr,
+                                    y_tr,
+                                    epochs=10,
+                                    batch_size=batch_p,
+                                    validation_data=(
+                                        X_val,
+                                        y_val
+                                    ),
+                                    callbacks=[early_stop],
+                                    verbose=0
+                                )
+
+                                pred = model.predict(
+                                    X_val,
+                                    verbose=0
+                                )
+
+                                pred_inv = scaler.inverse_transform(
+                                    pred
+                                ).flatten()
+
+                                actual_inv = scaler.inverse_transform(
+                                    y_val.reshape(-1, 1)
+                                ).flatten()
+
+                                mse = mean_squared_error(
+                                    actual_inv,
+                                    pred_inv
+                                )
+
+                                losses[i] = mse
+
+                                clear_session()
+                                gc.collect()
+
+                            except Exception as e:
+
+                                print("ERROR :", e)
+
+                                losses[i] = 1e12
+
+                        return losses
+
+                    # ======================================
+                    # OPTIMIZER
+                    # ======================================
+                    optimizer = ps.single.GlobalBestPSO(
+                        n_particles=particle,
+                        dimensions=4,
+                        options=options,
+                        bounds=bounds
+                    )
+
+                    best_cost, best_pos = optimizer.optimize(
+                        objective_function,
+                        iters=iterasi
+                    )
+
+                    # ======================================
+                    # BEST PARAMETER
+                    # ======================================
+                    best_units = int(
+                        np.round(best_pos[0])
+                    )
+
+                    best_lr = float(best_pos[1])
+
+                    best_batch = int(
+                        np.round(best_pos[2])
+                    )
+
+                    best_dropout = float(
+                        best_pos[3]
+                    )
+
+                    # ======================================
+                    # FINAL MODEL
+                    # ======================================
+                    clear_session()
+
+                    tf.random.set_seed(SEED)
+
+                    model_final = Sequential()
+
+                    model_final.add(
+                        Input(
+                            shape=(
+                                timestep,
+                                1
+                            )
+                        )
+                    )
+
+                    for l in range(layer):
+
+                        if l < layer - 1:
+
+                            model_final.add(
+                                GRU(
+                                    units=best_units,
+                                    activation='tanh',
+                                    return_sequences=True
+                                )
                             )
 
-                            model.add(
+                        else:
+
+                            model_final.add(
                                 GRU(
-                                    units=units_p,
+                                    units=best_units,
                                     activation='tanh'
                                 )
                             )
 
-                            model.add(
-                                Dropout(
-                                    dropout_p
-                                )
-                            )
+                        model_final.add(
+                            Dropout(best_dropout)
+                        )
 
-                            model.add(Dense(1))
+                    model_final.add(Dense(1))
 
-                            model.compile(
-                                optimizer=Adam(
-                                    learning_rate=lr_p
-                                ),
-                                loss='mse'
-                            )
+                    model_final.compile(
+                        optimizer=Adam(
+                            learning_rate=best_lr
+                        ),
+                        loss='mse'
+                    )
 
-                            model.fit(
-                                X_tr,
-                                y_tr,
-                                epochs=5,
-                                batch_size=batch_p,
-                                verbose=0
-                            )
+                    early_stop_final = EarlyStopping(
+                        monitor='val_loss',
+                        patience=5,
+                        restore_best_weights=True
+                    )
 
-                            pred = model.predict(
-                                X_val,
-                                verbose=0
-                            )
+                    history = model_final.fit(
+                        X_train,
+                        y_train,
+                        epochs=epoch,
+                        batch_size=best_batch,
+                        validation_split=0.2,
+                        callbacks=[early_stop_final],
+                        verbose=1
+                    )
 
-                            pred_inv = scaler.inverse_transform(
-                                pred
-                            ).flatten()
+                    # ======================================
+                    # PREDIKSI
+                    # ======================================
+                    y_pred_scaled = model_final.predict(
+                        X_test,
+                        verbose=0
+                    )
 
-                            actual_inv = scaler.inverse_transform(
-                                y_val.reshape(-1, 1)
-                            ).flatten()
+                    y_pred = scaler.inverse_transform(
+                        y_pred_scaled
+                    ).flatten()
 
-                            mse = mean_squared_error(
-                                actual_inv,
-                                pred_inv
-                            )
+                    y_actual = scaler.inverse_transform(
+                        y_test.reshape(-1, 1)
+                    ).flatten()
 
-                            losses[i] = mse
-
-                            clear_session()
-
-                            gc.collect()
-
-                        except:
-
-                            losses[i] = 999999999
-
-                    return losses
-
-                # ======================================
-                # RUN PSO
-                # ======================================
-                optimizer = ps.single.GlobalBestPSO(
-                    n_particles=particle,
-                    dimensions=4,
-                    options=options,
-                    bounds=bounds
-                )
-
-                best_cost, best_pos = optimizer.optimize(
-                    objective_function,
-                    iters=iterasi
-                )
-
-                # ======================================
-                # BEST PARAMETER
-                # ======================================
-                best_units = int(
-                    np.round(best_pos[0])
-                )
-
-                best_lr = float(
-                    best_pos[1]
-                )
-
-                best_batch = int(
-                    np.round(best_pos[2])
-                )
-
-                best_dropout = float(
-                    best_pos[3]
-                )
-
-                # ======================================
-                # FINAL MODEL
-                # ======================================
-                clear_session()
-
-                model_final = Sequential()
-
-                model_final.add(
-                    Input(
-                        shape=(
-                            timestep,
-                            1
+                    # ======================================
+                    # METRICS
+                    # ======================================
+                    rmse = np.sqrt(
+                        mean_squared_error(
+                            y_actual,
+                            y_pred
                         )
                     )
-                )
 
-                model_final.add(
-                    GRU(
-                        units=best_units,
-                        activation='tanh'
-                    )
-                )
-
-                model_final.add(
-                    Dropout(best_dropout)
-                )
-
-                model_final.add(Dense(1))
-
-                model_final.compile(
-                    optimizer=Adam(
-                        learning_rate=best_lr
-                    ),
-                    loss='mse'
-                )
-
-                history = model_final.fit(
-                    X_train,
-                    y_train,
-                    epochs=epoch,
-                    batch_size=best_batch,
-                    validation_split=0.2,
-                    verbose=1
-                )
-
-                # ======================================
-                # PREDIKSI
-                # ======================================
-                y_pred_scaled = model_final.predict(
-                    X_test,
-                    verbose=0
-                )
-
-                y_pred = scaler.inverse_transform(
-                    y_pred_scaled
-                ).flatten()
-
-                y_actual = scaler.inverse_transform(
-                    y_test.reshape(-1, 1)
-                ).flatten()
-
-                # ======================================
-                # METRICS
-                # ======================================
-                rmse = np.sqrt(
-                    mean_squared_error(
+                    mae = mean_absolute_error(
                         y_actual,
                         y_pred
                     )
-                )
 
-                mae = mean_absolute_error(
-                    y_actual,
-                    y_pred
-                )
+                    mape = (
+                        mean_absolute_percentage_error(
+                            y_actual,
+                            y_pred
+                        ) * 100
+                    )
 
-                mape = (
-                    mean_absolute_percentage_error(
+                    # ======================================
+                    # BEST PARAMETER
+                    # ======================================
+                    st.subheader(
+                        "🏆 Best Hyperparameter"
+                    )
+
+                    best_df = pd.DataFrame({
+
+                        "Units":
+                        [best_units],
+
+                        "Learning Rate":
+                        [best_lr],
+
+                        "Batch Size":
+                        [best_batch],
+
+                        "Dropout":
+                        [best_dropout],
+
+                        "Layer":
+                        [layer]
+                    })
+
+                    st.dataframe(
+                        best_df,
+                        use_container_width=True
+                    )
+
+                    # ======================================
+                    # METRICS
+                    # ======================================
+                    col1, col2, col3 = st.columns(3)
+
+                    col1.metric(
+                        "RMSE",
+                        f"Rp {rmse:,.2f}"
+                    )
+
+                    col2.metric(
+                        "MAE",
+                        f"Rp {mae:,.2f}"
+                    )
+
+                    col3.metric(
+                        "MAPE",
+                        f"{mape:.4f}%"
+                    )
+
+                    # ======================================
+                    # KONVERGENSI
+                    # ======================================
+                    st.subheader(
+                        "📉 Grafik Konvergensi PSO"
+                    )
+
+                    fig1, ax1 = plt.subplots(
+                        figsize=(10, 5)
+                    )
+
+                    ax1.plot(
+                        optimizer.cost_history,
+                        marker='o'
+                    )
+
+                    ax1.set_xlabel("Iterasi")
+
+                    ax1.set_ylabel("Best MSE")
+
+                    ax1.grid(alpha=0.3)
+
+                    st.pyplot(fig1)
+
+                    # ======================================
+                    # LOSS
+                    # ======================================
+                    st.subheader(
+                        "📉 Training vs Validation Loss"
+                    )
+
+                    fig2, ax2 = plt.subplots(
+                        figsize=(10, 5)
+                    )
+
+                    ax2.plot(
+                        history.history['loss'],
+                        label='Training Loss'
+                    )
+
+                    ax2.plot(
+                        history.history['val_loss'],
+                        label='Validation Loss'
+                    )
+
+                    ax2.legend()
+
+                    ax2.grid(alpha=0.3)
+
+                    st.pyplot(fig2)
+
+                    # ======================================
+                    # AKTUAL VS PREDIKSI
+                    # ======================================
+                    st.subheader(
+                        "📈 Aktual vs Prediksi"
+                    )
+
+                    fig3, ax3 = plt.subplots(
+                        figsize=(12, 6)
+                    )
+
+                    ax3.plot(
                         y_actual,
-                        y_pred
-                    ) * 100
-                )
+                        label='Aktual'
+                    )
 
-                # ======================================
-                # BEST PARAMETER
-                # ======================================
-                st.subheader(
-                    "🏆 Best Hyperparameter"
-                )
+                    ax3.plot(
+                        y_pred,
+                        label='Prediksi'
+                    )
 
-                best_df = pd.DataFrame({
+                    ax3.legend()
 
-                    "Units":
-                    [best_units],
+                    ax3.grid(alpha=0.3)
 
-                    "Learning Rate":
-                    [best_lr],
+                    st.pyplot(fig3)
 
-                    "Batch Size":
-                    [best_batch],
-
-                    "Dropout":
-                    [best_dropout]
-                })
-
-                st.dataframe(
-                    best_df,
-                    use_container_width=True
-                )
-
-                # ======================================
-                # EVALUASI
-                # ======================================
-                col1, col2, col3 = st.columns(3)
-
-                col1.metric(
-                    "RMSE",
-                    f"Rp {rmse:,.2f}"
-                )
-
-                col2.metric(
-                    "MAE",
-                    f"Rp {mae:,.2f}"
-                )
-
-                col3.metric(
-                    "MAPE",
-                    f"{mape:.4f}%"
-                )
-
-                # ======================================
-                # KONVERGENSI
-                # ======================================
-                st.subheader(
-                    "📉 Grafik Konvergensi PSO"
-                )
-
-                fig1, ax1 = plt.subplots(
-                    figsize=(10, 5)
-                )
-
-                ax1.plot(
-                    optimizer.cost_history,
-                    marker='o'
-                )
-
-                ax1.set_xlabel(
-                    "Iterasi"
-                )
-
-                ax1.set_ylabel(
-                    "Best MSE"
-                )
-
-                ax1.grid(alpha=0.3)
-
-                st.pyplot(fig1)
-
-                # ======================================
-                # LOSS
-                # ======================================
-                st.subheader(
-                    "📉 Training vs Validation Loss"
-                )
-
-                fig2, ax2 = plt.subplots(
-                    figsize=(10, 5)
-                )
-
-                ax2.plot(
-                    history.history['loss'],
-                    label='Training Loss'
-                )
-
-                ax2.plot(
-                    history.history['val_loss'],
-                    label='Validation Loss'
-                )
-
-                ax2.legend()
-
-                ax2.grid(alpha=0.3)
-
-                st.pyplot(fig2)
-
-                # ======================================
-                # AKTUAL VS PREDIKSI
-                # ======================================
-                st.subheader(
-                    "📈 Aktual vs Prediksi"
-                )
-
-                fig3, ax3 = plt.subplots(
-                    figsize=(12, 6)
-                )
-
-                ax3.plot(
-                    y_actual,
-                    label='Aktual'
-                )
-
-                ax3.plot(
-                    y_pred,
-                    label='Prediksi'
-                )
-
-                ax3.legend()
-
-                ax3.grid(alpha=0.3)
-
-                st.pyplot(fig3)
-
-                st.success(
-                    "Optimasi GRU-PSO berhasil!"
-                )
+                    st.success(
+                        "Optimasi GRU-PSO berhasil!"
+                    )
 
     except Exception as e:
 
