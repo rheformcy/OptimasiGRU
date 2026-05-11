@@ -32,10 +32,6 @@ from tensorflow.keras.layers import (
 
 from tensorflow.keras.optimizers import Adam
 
-from tensorflow.keras.callbacks import (
-    EarlyStopping
-)
-
 from tensorflow.keras.backend import clear_session
 
 # ======================================================
@@ -50,7 +46,7 @@ clear_session()
 gc.collect()
 
 # ======================================================
-# KONFIGURASI HALAMAN
+# PAGE CONFIG
 # ======================================================
 st.set_page_config(
     page_title="Optimasi GRU-PSO",
@@ -71,7 +67,7 @@ Statistika UNDIP
 st.divider()
 
 # ======================================================
-# SIDEBAR UPLOAD
+# SIDEBAR
 # ======================================================
 st.sidebar.header("📂 Upload Dataset")
 
@@ -118,18 +114,21 @@ st.sidebar.header("🚀 Parameter PSO")
 particle = st.sidebar.number_input(
     "Jumlah Partikel",
     min_value=1,
+    max_value=100,
     value=5
 )
 
 iterasi = st.sidebar.number_input(
     "Jumlah Iterasi",
     min_value=1,
+    max_value=100,
     value=3
 )
 
 epoch = st.sidebar.number_input(
     "Epoch Final Training",
     min_value=1,
+    max_value=500,
     value=30
 )
 
@@ -148,7 +147,7 @@ st.sidebar.subheader("Range Units")
 units_min = st.sidebar.number_input(
     "Units Minimum",
     min_value=1,
-    value=8
+    value=16
 )
 
 units_max = st.sidebar.number_input(
@@ -186,7 +185,7 @@ st.sidebar.subheader("Range Batch Size")
 batch_min = st.sidebar.number_input(
     "Batch Minimum",
     min_value=1,
-    value=8
+    value=16
 )
 
 batch_max = st.sidebar.number_input(
@@ -204,7 +203,7 @@ dropout_min = st.sidebar.slider(
     "Dropout Minimum",
     min_value=0.0,
     max_value=0.9,
-    value=0.0,
+    value=0.1,
     step=0.1
 )
 
@@ -215,6 +214,24 @@ dropout_max = st.sidebar.slider(
     value=0.5,
     step=0.1
 )
+
+# ======================================================
+# WARNING
+# ======================================================
+if units_max > 128:
+    st.sidebar.warning(
+        "Units terlalu besar dapat memperlambat training"
+    )
+
+if layer > 2:
+    st.sidebar.warning(
+        "Layer tinggi dapat memperlambat training"
+    )
+
+if epoch > 100:
+    st.sidebar.warning(
+        "Epoch besar dapat memperlambat proses"
+    )
 
 # ======================================================
 # MAIN PROGRAM
@@ -243,7 +260,7 @@ if uploaded_file is not None:
         )
 
         # ==================================================
-        # PREVIEW DATASET
+        # PREVIEW
         # ==================================================
         if menu == "Preview Dataset":
 
@@ -255,7 +272,7 @@ if uploaded_file is not None:
             )
 
         # ==================================================
-        # STATISTIKA DESKRIPTIF
+        # DESKRIPTIF
         # ==================================================
         elif menu == "Statistika Deskriptif":
 
@@ -296,7 +313,7 @@ if uploaded_file is not None:
                 )
 
                 ax.set_title(
-                    "Time Series Harga Emas"
+                    "Time Series Harga"
                 )
 
                 ax.grid(alpha=0.3)
@@ -362,11 +379,13 @@ if uploaded_file is not None:
                 )
 
         # ==================================================
-        # BASELINE GRU
+        # BASELINE MODEL
         # ==================================================
         elif menu == "Baseline Model (GRU-Adam)":
 
-            st.subheader("🤖 Baseline Model (GRU-Adam)")
+            st.subheader(
+                "🤖 Baseline Model (GRU-Adam)"
+            )
 
             if "Terakhir" not in df.columns:
 
@@ -393,7 +412,7 @@ if uploaded_file is not None:
                     tf.random.set_seed(SEED)
 
                     # ======================================
-                    # PARAMETER
+                    # PARAMETER FIXED
                     # ======================================
                     GS_epoch = 100
                     GS_batch = 64
@@ -404,7 +423,9 @@ if uploaded_file is not None:
                     # ======================================
                     # DATA
                     # ======================================
-                    values = df[['Terakhir']].values.astype(float)
+                    values = df[
+                        ['Terakhir']
+                    ].values.astype(float)
 
                     n = len(values)
 
@@ -419,7 +440,10 @@ if uploaded_file is not None:
                     X = []
                     y = []
 
-                    for i in range(timestep, len(scaled_data)):
+                    for i in range(
+                        timestep,
+                        len(scaled_data)
+                    ):
 
                         X.append(
                             scaled_data[
@@ -461,26 +485,15 @@ if uploaded_file is not None:
                     # ======================================
                     # MODEL
                     # ======================================
-                    model = Sequential()
-
-                    model.add(
-                        Input(
-                            shape=(timestep, 1)
-                        )
-                    )
-
-                    model.add(
+                    model = Sequential([
+                        Input(shape=(timestep, 1)),
                         GRU(
                             units=GS_units,
                             activation='tanh'
-                        )
-                    )
-
-                    model.add(
-                        Dropout(GS_dropout)
-                    )
-
-                    model.add(Dense(1))
+                        ),
+                        Dropout(GS_dropout),
+                        Dense(1)
+                    ])
 
                     model.compile(
                         optimizer=Adam(
@@ -489,20 +502,17 @@ if uploaded_file is not None:
                         loss='mse'
                     )
 
-                    early_stop = EarlyStopping(
-                        monitor='val_loss',
-                        patience=5,
-                        restore_best_weights=True
-                    )
-
                     history = model.fit(
                         X_train,
                         y_train,
                         epochs=GS_epoch,
                         batch_size=GS_batch,
                         validation_split=0.2,
-                        callbacks=[early_stop],
-                        verbose=1
+                        verbose=0
+                    )
+
+                    st.write(
+                        "✅ Baseline training selesai"
                     )
 
                     # ======================================
@@ -543,9 +553,6 @@ if uploaded_file is not None:
                         ) * 100
                     )
 
-                    # ======================================
-                    # HASIL
-                    # ======================================
                     col1, col2, col3 = st.columns(3)
 
                     col1.metric(
@@ -617,16 +624,21 @@ if uploaded_file is not None:
 
                     st.pyplot(fig2)
 
+                    clear_session()
+                    gc.collect()
+
                     st.success(
-                        "Training baseline berhasil!"
+                        "Baseline GRU berhasil!"
                     )
 
         # ==================================================
-        # OPTIMASI GRU-PSO
+        # GRU PSO
         # ==================================================
         elif menu == "Optimasi GRU-PSO":
 
-            st.subheader("🚀 Optimasi GRU-PSO")
+            st.subheader(
+                "🚀 Optimasi GRU-PSO"
+            )
 
             if "Terakhir" not in df.columns:
 
@@ -655,28 +667,27 @@ if uploaded_file is not None:
                     # ======================================
                     # DATA
                     # ======================================
-                    values = df[['Terakhir']].values.astype(float)
+                    values = df[
+                        ['Terakhir']
+                    ].values.astype(float)
 
                     n = len(values)
 
                     n_train = int(n * 0.8)
 
-                    # ======================================
-                    # SCALING
-                    # ======================================
                     scaler = MinMaxScaler()
 
                     scaler.fit(values[:n_train])
 
                     scaled_data = scaler.transform(values)
 
-                    # ======================================
-                    # WINDOWING
-                    # ======================================
                     X = []
                     y = []
 
-                    for i in range(timestep, len(scaled_data)):
+                    for i in range(
+                        timestep,
+                        len(scaled_data)
+                    ):
 
                         X.append(
                             scaled_data[
@@ -731,7 +742,7 @@ if uploaded_file is not None:
                     y_val = y_train[train_size:]
 
                     # ======================================
-                    # OPTIONS PSO
+                    # PSO OPTIONS
                     # ======================================
                     options = {
                         'c1': 2.0,
@@ -764,12 +775,16 @@ if uploaded_file is not None:
 
                         losses = np.zeros(n_particles)
 
-                        for i, particle_i in enumerate(particles):
+                        for i, particle_i in enumerate(
+                            particles
+                        ):
 
                             try:
 
                                 units_p = int(
-                                    np.round(particle_i[0])
+                                    np.round(
+                                        particle_i[0]
+                                    )
                                 )
 
                                 lr_p = float(
@@ -777,36 +792,50 @@ if uploaded_file is not None:
                                 )
 
                                 batch_p = int(
-                                    np.round(particle_i[2])
+                                    np.round(
+                                        particle_i[2]
+                                    )
                                 )
 
                                 dropout_p = float(
                                     particle_i[3]
                                 )
 
-                                units_p = max(1, units_p)
+                                units_p = max(
+                                    1,
+                                    units_p
+                                )
 
-                                batch_p = max(1, batch_p)
+                                batch_p = max(
+                                    1,
+                                    batch_p
+                                )
 
                                 dropout_p = min(
-                                    max(dropout_p, 0.0),
+                                    max(
+                                        dropout_p,
+                                        0.0
+                                    ),
                                     0.9
                                 )
 
                                 clear_session()
+                                gc.collect()
 
-                                tf.random.set_seed(SEED)
+                                tf.random.set_seed(
+                                    SEED
+                                )
 
-                                # ==============================
+                                # ==========================
                                 # MODEL
-                                # ==============================
+                                # ==========================
                                 model = Sequential()
 
                                 model.add(
                                     Input(
                                         shape=(
-                                            timestep,
-                                            1
+                                            X_tr.shape[1],
+                                            X_tr.shape[2]
                                         )
                                     )
                                 )
@@ -833,10 +862,14 @@ if uploaded_file is not None:
                                         )
 
                                     model.add(
-                                        Dropout(dropout_p)
+                                        Dropout(
+                                            dropout_p
+                                        )
                                     )
 
-                                model.add(Dense(1))
+                                model.add(
+                                    Dense(1)
+                                )
 
                                 model.compile(
                                     optimizer=Adam(
@@ -845,22 +878,14 @@ if uploaded_file is not None:
                                     loss='mse'
                                 )
 
-                                early_stop = EarlyStopping(
-                                    monitor='val_loss',
-                                    patience=3,
-                                    restore_best_weights=True
-                                )
-
+                                # ==========================
+                                # FIT IDENTIK GCOLAB
+                                # ==========================
                                 model.fit(
                                     X_tr,
                                     y_tr,
                                     epochs=10,
                                     batch_size=batch_p,
-                                    validation_data=(
-                                        X_val,
-                                        y_val
-                                    ),
-                                    callbacks=[early_stop],
                                     verbose=0
                                 )
 
@@ -889,7 +914,10 @@ if uploaded_file is not None:
 
                             except Exception as e:
 
-                                print("ERROR :", e)
+                                print(
+                                    "ERROR :",
+                                    e
+                                )
 
                                 losses[i] = 1e12
 
@@ -910,6 +938,10 @@ if uploaded_file is not None:
                         iters=iterasi
                     )
 
+                    st.write(
+                        "✅ PSO selesai"
+                    )
+
                     # ======================================
                     # BEST PARAMETER
                     # ======================================
@@ -917,7 +949,9 @@ if uploaded_file is not None:
                         np.round(best_pos[0])
                     )
 
-                    best_lr = float(best_pos[1])
+                    best_lr = float(
+                        best_pos[1]
+                    )
 
                     best_batch = int(
                         np.round(best_pos[2])
@@ -931,6 +965,7 @@ if uploaded_file is not None:
                     # FINAL MODEL
                     # ======================================
                     clear_session()
+                    gc.collect()
 
                     tf.random.set_seed(SEED)
 
@@ -979,20 +1014,21 @@ if uploaded_file is not None:
                         loss='mse'
                     )
 
-                    early_stop_final = EarlyStopping(
-                        monitor='val_loss',
-                        patience=5,
-                        restore_best_weights=True
-                    )
-
+                    # ======================================
+                    # FINAL TRAINING
+                    # IDENTIK GCOLAB
+                    # ======================================
                     history = model_final.fit(
                         X_train,
                         y_train,
                         epochs=epoch,
                         batch_size=best_batch,
                         validation_split=0.2,
-                        callbacks=[early_stop_final],
-                        verbose=1
+                        verbose=0
+                    )
+
+                    st.write(
+                        "✅ Final training selesai"
                     )
 
                     # ======================================
@@ -1099,9 +1135,13 @@ if uploaded_file is not None:
                         marker='o'
                     )
 
-                    ax1.set_xlabel("Iterasi")
+                    ax1.set_xlabel(
+                        "Iterasi"
+                    )
 
-                    ax1.set_ylabel("Best MSE")
+                    ax1.set_ylabel(
+                        "Best MSE"
+                    )
 
                     ax1.grid(alpha=0.3)
 
@@ -1160,6 +1200,9 @@ if uploaded_file is not None:
                     ax3.grid(alpha=0.3)
 
                     st.pyplot(fig3)
+
+                    clear_session()
+                    gc.collect()
 
                     st.success(
                         "Optimasi GRU-PSO berhasil!"
