@@ -134,40 +134,84 @@ if uploaded_file is not None:
     try:
 
         # ==============================================
-        # MEMBACA FILE EXCEL
+        # MEMBACA FILE
         # ==============================================
         df = pd.read_excel(uploaded_file)
 
-        # Hapus spasi pada nama kolom
         df.columns = df.columns.str.strip()
 
-        st.success("✅ File Excel berhasil dibaca!")
-
         # ==============================================
-        # INFORMASI DATASET
+        # MENU ANALISIS
         # ==============================================
-        st.subheader("📌 Informasi Dataset")
+        if menu == "Preview Dataset":
 
-        col1, col2, col3 = st.columns(3)
+            st.subheader("📄 Preview Dataset")
 
-        with col1:
-            st.metric(
-                "Jumlah Baris",
-                df.shape[0]
+            st.dataframe(df.head())
+
+        elif menu == "Statistika Deskriptif":
+
+            st.subheader("📊 Statistika Deskriptif")
+
+            numeric_df = df.select_dtypes(
+                include=['int64', 'float64']
             )
 
-        with col2:
-            st.metric(
-                "Jumlah Kolom",
-                df.shape[1]
+            st.dataframe(
+                numeric_df.describe()
             )
 
-        with col3:
-            st.metric(
-                "Missing Values",
-                df.isnull().sum().sum()
+        elif menu == "Visualisasi Time Series Plot":
+
+            st.subheader(
+                "📈 Visualisasi Time Series Plot"
             )
 
+            st.write("Nanti isi plot di sini")
+
+        elif menu == "Cek Missing Values":
+
+            st.subheader(
+                "🧩 Cek Missing Values"
+            )
+
+            st.write(df.isnull().sum())
+
+        elif menu == "Cek Outliers":
+
+            st.subheader(
+                "🚨 Cek Outliers"
+            )
+
+            st.write("Nanti isi outlier")
+
+        elif menu == "Baseline Model (GRU-Adam)":
+
+            st.subheader(
+                "🤖 Baseline Model"
+            )
+
+        elif menu == "Forecast":
+
+            st.subheader(
+                "🔮 Forecast"
+            )
+
+        elif menu == "Grafik Predict vs Actual":
+
+            st.subheader(
+                "📉 Predict vs Actual"
+            )
+
+    except Exception as e:
+
+        st.error(f"Terjadi error: {e}")
+
+else:
+
+    st.info(
+        "Silakan upload file Excel terlebih dahulu."
+    )
 # ==============================================
 # PREVIEW DATASET
 # ==============================================
