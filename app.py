@@ -146,21 +146,106 @@ run_btn = st.sidebar.button(
 # ======================================================
 if uploaded_file is not None:
 
-    st.success("File berhasil diupload!")
-
     try:
+
+        # ==============================================
+        # MEMBACA FILE EXCEL
+        # ==============================================
         df = pd.read_excel(uploaded_file)
 
+        # Hapus spasi pada nama kolom
+        df.columns = df.columns.str.strip()
+
+        st.success("✅ File Excel berhasil dibaca!")
+
+        # ==============================================
+        # INFORMASI DATASET
+        # ==============================================
+        st.subheader("📌 Informasi Dataset")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Jumlah Baris",
+                df.shape[0]
+            )
+
+        with col2:
+            st.metric(
+                "Jumlah Kolom",
+                df.shape[1]
+            )
+
+        with col3:
+            st.metric(
+                "Missing Values",
+                df.isnull().sum().sum()
+            )
+
+        # ==============================================
+        # PREVIEW DATA
+        # ==============================================
         st.subheader("📄 Preview Dataset")
-        st.dataframe(df.head())
+
+        st.dataframe(
+            df.head(),
+            use_container_width=True
+        )
+
+        # ==============================================
+        # INFORMASI TIPE DATA
+        # ==============================================
+        st.subheader("📌 Tipe Data")
+
+        dtype_df = pd.DataFrame({
+            "Kolom": df.columns,
+            "Tipe Data": df.dtypes.astype(str)
+        })
+
+        st.dataframe(
+            dtype_df,
+            use_container_width=True
+        )
+
+        # ==============================================
+        # VALIDASI KOLOM
+        # ==============================================
+        required_cols = [
+            "Tanggal",
+            "Terakhir"
+        ]
+
+        missing_cols = [
+            col for col in required_cols
+            if col not in df.columns
+        ]
+
+        if len(missing_cols) > 0:
+
+            st.error(
+                f"""
+                Kolom berikut tidak ditemukan:
+                {missing_cols}
+                """
+            )
+
+        else:
+
+            st.success(
+                "✅ Kolom 'Tanggal' dan 'Terakhir' tersedia"
+            )
 
     except Exception as e:
-        st.error(f"Terjadi error: {e}")
+
+        st.error(
+            f"❌ Terjadi error saat membaca file: {e}"
+        )
 
 else:
 
     st.info(
-        "Silakan upload dataset Excel terlebih dahulu."
+        "📂 Silakan upload file Excel terlebih dahulu."
     )
 
 # ======================================================
