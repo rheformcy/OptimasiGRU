@@ -1,10 +1,13 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
-import tensorflow as tf
+import matplotlib.pyplot as plt
 import random
+import gc
 
+# ======================================================
+# SCIKIT LEARN
+# ======================================================
 from sklearn.preprocessing import MinMaxScaler
 
 from sklearn.metrics import (
@@ -12,6 +15,11 @@ from sklearn.metrics import (
     mean_absolute_error,
     mean_absolute_percentage_error
 )
+
+# ======================================================
+# TENSORFLOW
+# ======================================================
+import tensorflow as tf
 
 from tensorflow.keras.models import Sequential
 
@@ -27,6 +35,12 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import (
     EarlyStopping
 )
+
+# ======================================================
+# CLEAR SESSION
+# ======================================================
+tf.keras.backend.clear_session()
+gc.collect()
 
 # ======================================================
 # KONFIGURASI HALAMAN
@@ -64,7 +78,7 @@ st.sidebar.caption(
 )
 
 # ======================================================
-# SIDEBAR - MENU ANALISIS
+# SIDEBAR - MENU
 # ======================================================
 st.sidebar.header("📌 Pilihan Analisis")
 
@@ -76,33 +90,19 @@ menu = st.sidebar.radio(
         "Visualisasi Time Series Plot",
         "Cek Missing Values",
         "Cek Outliers",
-        "Baseline Model (GRU-Adam)",
-        "Forecast",
-        "Grafik Predict vs Actual"
+        "Baseline Model (GRU-Adam)"
     ]
 )
 
 # ======================================================
 # SIDEBAR - PARAMETER
 # ======================================================
-st.sidebar.header("⚙️ Optimasi GRU-PSO")
-
-iterasi = st.sidebar.number_input(
-    "Jumlah Iterasi",
-    min_value=1,
-    value=10
-)
-
-particle = st.sidebar.number_input(
-    "Jumlah Particle",
-    min_value=1,
-    value=20
-)
+st.sidebar.header("⚙️ Parameter Model")
 
 epoch = st.sidebar.number_input(
     "Jumlah Epoch",
     min_value=1,
-    value=50
+    value=10
 )
 
 learning_rate = st.sidebar.number_input(
@@ -117,7 +117,7 @@ learning_rate = st.sidebar.number_input(
 batch_size = st.sidebar.number_input(
     "Batch Size",
     min_value=1,
-    value=32
+    value=16
 )
 
 dropout = st.sidebar.slider(
@@ -131,27 +131,22 @@ dropout = st.sidebar.slider(
 layer = st.sidebar.number_input(
     "Jumlah Layer",
     min_value=1,
-    max_value=5,
+    max_value=3,
     value=1
 )
 
 units = st.sidebar.number_input(
     "Jumlah Units",
     min_value=1,
-    value=64
+    max_value=128,
+    value=16
 )
 
 timestep = st.sidebar.number_input(
     "Timestep / Window Size",
     min_value=1,
-    value=3
-)
-
-# ======================================================
-# BUTTON
-# ======================================================
-run_btn = st.sidebar.button(
-    "🚀 Jalankan Model"
+    max_value=30,
+    value=1
 )
 
 # ======================================================
@@ -161,13 +156,15 @@ if uploaded_file is not None:
 
     try:
 
-        # ==============================================
-        # MEMBACA FILE
-        # ==============================================
+        # ==================================================
+        # LOAD DATA
+        # ==================================================
         df = pd.read_excel(uploaded_file)
 
+        # Bersihkan nama kolom
         df.columns = df.columns.str.strip()
 
+        # Bersihkan missing palsu
         df = df.replace(
             r'^\s*$',
             pd.NA,
@@ -180,37 +177,35 @@ if uploaded_file is not None:
             inplace=True
         )
 
-        # ==============================================
+        # ==================================================
         # PREVIEW DATASET
-        # ==============================================
+        # ==================================================
         if menu == "Preview Dataset":
 
             st.subheader("📄 Preview Dataset")
 
-            if "Tanggal" in df.columns:
+            df_preview = df.copy()
 
-                df_preview = df.copy()
+            if "Tanggal" in df_preview.columns:
 
                 df_preview["Tanggal"] = pd.to_datetime(
                     df_preview["Tanggal"],
                     errors='coerce'
                 ).dt.date
 
-            else:
-
-                df_preview = df.copy()
-
             st.dataframe(
                 df_preview.head(),
                 use_container_width=True
             )
 
-        # ==============================================
+        # ==================================================
         # STATISTIKA DESKRIPTIF
-        # ==============================================
+        # ==================================================
         elif menu == "Statistika Deskriptif":
 
-            st.subheader("📊 Statistika Deskriptif")
+            st.subheader(
+                "📊 Statistika Deskriptif"
+            )
 
             numeric_df = df.select_dtypes(
                 include=['int64', 'float64']
@@ -221,9 +216,9 @@ if uploaded_file is not None:
                 use_container_width=True
             )
 
-        # ==============================================
-        # TIME SERIES PLOT
-        # ==============================================
+        # ==================================================
+        # VISUALISASI
+        # ==================================================
         elif menu == "Visualisasi Time Series Plot":
 
             st.subheader(
@@ -244,14 +239,19 @@ if uploaded_file is not None:
                         df["Tanggal"]
                     ).dt.date,
 
-                    df["Terakhir"]
+                    df["Terakhir"],
+                    linewidth=2
                 )
 
-                ax.set_xlabel("Tanggal")
-                ax.set_ylabel("Harga")
                 ax.set_title(
                     "Time Series Harga Emas"
                 )
+
+                ax.set_xlabel("Tanggal")
+
+                ax.set_ylabel("Harga")
+
+                ax.grid(alpha=0.3)
 
                 st.pyplot(fig)
 
@@ -262,9 +262,9 @@ if uploaded_file is not None:
                     "'Terakhir' tidak ditemukan."
                 )
 
-        # ==============================================
+        # ==================================================
         # MISSING VALUE
-        # ==============================================
+        # ==================================================
         elif menu == "Cek Missing Values":
 
             st.subheader(
@@ -272,7 +272,10 @@ if uploaded_file is not None:
             )
 
             missing_df = pd.DataFrame({
-                "Kolom": df.columns,
+
+                "Kolom":
+                df.columns,
+
                 "Jumlah Missing":
                 df.isnull().sum().values
             })
@@ -282,13 +285,13 @@ if uploaded_file is not None:
                 use_container_width=True
             )
 
-        # ==============================================
+        # ==================================================
         # OUTLIER
-        # ==============================================
+        # ==================================================
         elif menu == "Cek Outliers":
 
             st.subheader(
-                "🚨 Deteksi Outliers (IQR)"
+                "🚨 Deteksi Outlier (IQR)"
             )
 
             if "Terakhir" in df.columns:
@@ -300,11 +303,11 @@ if uploaded_file is not None:
                 IQR = Q3 - Q1
 
                 lower_bound = (
-                    Q1 - (1.5 * IQR)
+                    Q1 - 1.5 * IQR
                 )
 
                 upper_bound = (
-                    Q3 + (1.5 * IQR)
+                    Q3 + 1.5 * IQR
                 )
 
                 outliers = df[
@@ -318,9 +321,9 @@ if uploaded_file is not None:
                     )
                 ]
 
-                if "Tanggal" in outliers.columns:
+                outliers = outliers.copy()
 
-                    outliers = outliers.copy()
+                if "Tanggal" in outliers.columns:
 
                     outliers["Tanggal"] = pd.to_datetime(
                         outliers["Tanggal"],
@@ -342,9 +345,9 @@ if uploaded_file is not None:
                     "Kolom 'Terakhir' tidak ditemukan."
                 )
 
-        # ==============================================
+        # ==================================================
         # BASELINE MODEL
-        # ==============================================
+        # ==================================================
         elif menu == "Baseline Model (GRU-Adam)":
 
             st.subheader(
@@ -363,9 +366,13 @@ if uploaded_file is not None:
                     "Training baseline GRU..."
                 ):
 
-                    # ==================================
-                    # SEED
-                    # ==================================
+                    gc.collect()
+
+                    tf.keras.backend.clear_session()
+
+                    # ======================================
+                    # SET SEED
+                    # ======================================
                     SEED = 49
 
                     random.seed(SEED)
@@ -374,117 +381,71 @@ if uploaded_file is not None:
 
                     tf.random.set_seed(SEED)
 
-                    # ==================================
-                    # SPLIT DATA
-                    # ==================================
-                    feature_cols = ["Terakhir"]
-
-                    target_col = "Terakhir"
-
-                    data_features = (
-                        df[feature_cols].values
-                    )
-
-                    data_target = (
-                        df[[target_col]].values
-                    )
-
-                    values = (
-                        df[['Terakhir']].values
-                    )
+                    # ======================================
+                    # DATA
+                    # ======================================
+                    values = df[
+                        ['Terakhir']
+                    ].values
 
                     n = len(values)
 
                     n_train = int(n * 0.8)
 
-                    # ==================================
+                    # ======================================
                     # SCALING
-                    # ==================================
-                    scaler_X = MinMaxScaler().fit(
-                        data_features[:n_train]
+                    # ======================================
+                    scaler = MinMaxScaler()
+
+                    scaler.fit(
+                        values[:n_train]
                     )
 
-                    scaler_y = MinMaxScaler().fit(
-                        data_target[:n_train]
+                    scaled_data = scaler.transform(
+                        values
                     )
 
-                    Xs = scaler_X.transform(
-                        data_features
-                    )
-
-                    ys = scaler_y.transform(
-                        data_target
-                    )
-
-                    # ==================================
-                    # WINDOW
-                    # ==================================
-                    GS_window = timestep
-
-                    # ==================================
+                    # ======================================
                     # WINDOWING
-                    # ==================================
-                    def make_sequences(
-                        X_scaled,
-                        y_scaled,
-                        window
+                    # ======================================
+                    X = []
+
+                    y = []
+
+                    for i in range(
+                        timestep,
+                        len(scaled_data)
                     ):
 
-                        X_seq = []
-
-                        y_seq = []
-
-                        for i in range(
-                            window,
-                            len(X_scaled)
-                        ):
-
-                            X_seq.append(
-                                X_scaled[
-                                    i-window:i
-                                ]
-                            )
-
-                            y_seq.append(
-                                y_scaled[i]
-                            )
-
-                        return (
-                            np.array(X_seq),
-                            np.array(y_seq)
+                        X.append(
+                            scaled_data[
+                                i-timestep:i
+                            ]
                         )
 
-                    X_seq_all, y_seq_all = (
-                        make_sequences(
-                            Xs,
-                            ys,
-                            window=GS_window
+                        y.append(
+                            scaled_data[i]
                         )
+
+                    X = np.array(X)
+
+                    y = np.array(y)
+
+                    split_idx = (
+                        n_train - timestep
                     )
 
-                    dtrain_end = (
-                        n_train - GS_window
-                    )
+                    X_train = X[:split_idx]
 
-                    X_train = (
-                        X_seq_all[:dtrain_end]
-                    )
+                    y_train = y[:split_idx]
 
-                    y_train = (
-                        y_seq_all[:dtrain_end]
-                    )
+                    X_test = X[split_idx:]
 
-                    X_test = (
-                        X_seq_all[dtrain_end:]
-                    )
+                    y_test = y[split_idx:]
 
-                    y_test = (
-                        y_seq_all[dtrain_end:]
-                    )
-
-                    # ==================================
+                    # ======================================
                     # RESHAPE
-                    # ==================================
+                    # ======================================
                     X_train = X_train.reshape(
                         (
                             X_train.shape[0],
@@ -501,160 +462,145 @@ if uploaded_file is not None:
                         )
                     )
 
-                    # ==================================
-                    # PARAMETER MODEL
-                    # ==================================
-                    GS_epoch = epoch
-
-                    GS_batch = batch_size
-
-                    GS_units = units
-
-                    GS_layers = layer
-
-                    GS_dropout = dropout
-
-                    GS_LR = learning_rate
-
-                    # ==================================
+                    # ======================================
                     # BUILD MODEL
-                    # ==================================
-                    def build_gru_model():
+                    # ======================================
+                    model = Sequential()
 
-                        model = Sequential()
+                    model.add(
+                        Input(
+                            shape=(
+                                timestep,
+                                1
+                            )
+                        )
+                    )
+
+                    # ======================================
+                    # SINGLE LAYER
+                    # ======================================
+                    if layer == 1:
 
                         model.add(
-                            Input(
-                                shape=(
-                                    GS_window,
-                                    1
-                                )
+                            GRU(
+                                units=units,
+                                activation='tanh'
                             )
                         )
 
-                        if GS_layers == 1:
+                        model.add(
+                            Dropout(dropout)
+                        )
+
+                    # ======================================
+                    # MULTI LAYER
+                    # ======================================
+                    else:
+
+                        for i in range(layer):
+
+                            is_last = (
+                                i == layer - 1
+                            )
 
                             model.add(
                                 GRU(
-                                    units=GS_units,
+                                    units=units,
+                                    return_sequences=(
+                                        not is_last
+                                    ),
                                     activation='tanh'
                                 )
                             )
 
                             model.add(
-                                Dropout(GS_dropout)
+                                Dropout(dropout)
                             )
 
-                        else:
-
-                            for i in range(
-                                GS_layers
-                            ):
-
-                                is_last = (
-                                    i == GS_layers - 1
-                                )
-
-                                model.add(
-                                    GRU(
-                                        units=GS_units,
-                                        return_sequences=(
-                                            not is_last
-                                        ),
-                                        activation='tanh'
-                                    )
-                                )
-
-                                model.add(
-                                    Dropout(
-                                        GS_dropout
-                                    )
-                                )
-
-                        model.add(
-                            Dense(
-                                1,
-                                activation='linear'
-                            )
+                    # ======================================
+                    # OUTPUT
+                    # ======================================
+                    model.add(
+                        Dense(
+                            1,
+                            activation='linear'
                         )
+                    )
 
-                        model.compile(
-                            optimizer=Adam(
-                                learning_rate=GS_LR
-                            ),
-                            loss='mse'
-                        )
+                    # ======================================
+                    # COMPILE
+                    # ======================================
+                    model.compile(
+                        optimizer=Adam(
+                            learning_rate=
+                            learning_rate
+                        ),
+                        loss='mse'
+                    )
 
-                        return model
-
-                    # ==================================
-                    # TRAINING
-                    # ==================================
-                    gru_standar = build_gru_model()
-
+                    # ======================================
+                    # EARLY STOPPING
+                    # ======================================
                     early_stop = EarlyStopping(
                         monitor='val_loss',
-                        patience=7,
+                        patience=5,
                         restore_best_weights=True
                     )
 
-                    history = gru_standar.fit(
+                    # ======================================
+                    # TRAINING
+                    # ======================================
+                    history = model.fit(
                         X_train,
                         y_train,
-                        epochs=GS_epoch,
-                        batch_size=GS_batch,
+                        epochs=epoch,
+                        batch_size=batch_size,
                         validation_split=0.2,
                         callbacks=[early_stop],
+                        verbose=1
+                    )
+
+                    # ======================================
+                    # PREDIKSI
+                    # ======================================
+                    y_pred_scaled = model.predict(
+                        X_test,
                         verbose=0
                     )
 
-                    # ==================================
-                    # PREDIKSI
-                    # ==================================
-                    y_pred_scaled = (
-                        gru_standar.predict(
-                            X_test,
-                            verbose=0
-                        )
-                    )
+                    y_pred = scaler.inverse_transform(
+                        y_pred_scaled
+                    ).flatten()
 
-                    y_pred_inv = (
-                        scaler_y.inverse_transform(
-                            y_pred_scaled
-                        ).flatten()
-                    )
+                    y_actual = scaler.inverse_transform(
+                        y_test.reshape(-1, 1)
+                    ).flatten()
 
-                    y_test_inv = (
-                        scaler_y.inverse_transform(
-                            y_test.reshape(-1, 1)
-                        ).flatten()
-                    )
-
-                    # ==================================
-                    # METRICS
-                    # ==================================
+                    # ======================================
+                    # EVALUASI
+                    # ======================================
                     rmse = np.sqrt(
                         mean_squared_error(
-                            y_test_inv,
-                            y_pred_inv
+                            y_actual,
+                            y_pred
                         )
                     )
 
                     mae = mean_absolute_error(
-                        y_test_inv,
-                        y_pred_inv
+                        y_actual,
+                        y_pred
                     )
 
                     mape = (
                         mean_absolute_percentage_error(
-                            y_test_inv,
-                            y_pred_inv
+                            y_actual,
+                            y_pred
                         ) * 100
                     )
 
-                    # ==================================
-                    # HASIL EVALUASI
-                    # ==================================
+                    # ======================================
+                    # METRICS
+                    # ======================================
                     st.subheader(
                         "📊 Hasil Evaluasi"
                     )
@@ -676,9 +622,9 @@ if uploaded_file is not None:
                         f"{mape:.4f}%"
                     )
 
-                    # ==================================
-                    # PLOT LOSS
-                    # ==================================
+                    # ======================================
+                    # LOSS PLOT
+                    # ======================================
                     st.subheader(
                         "📉 Training vs Validation Loss"
                     )
@@ -703,9 +649,9 @@ if uploaded_file is not None:
 
                     st.pyplot(fig1)
 
-                    # ==================================
-                    # PLOT PREDIKSI
-                    # ==================================
+                    # ======================================
+                    # PREDICT VS ACTUAL
+                    # ======================================
                     st.subheader(
                         "📈 Aktual vs Prediksi"
                     )
@@ -715,14 +661,16 @@ if uploaded_file is not None:
                     )
 
                     ax2.plot(
-                        y_test_inv,
-                        label='Aktual'
+                        y_actual,
+                        label='Aktual',
+                        linewidth=2
                     )
 
                     ax2.plot(
-                        y_pred_inv,
+                        y_pred,
+                        label='Prediksi',
                         linestyle='--',
-                        label='Prediksi'
+                        linewidth=2
                     )
 
                     ax2.legend()
@@ -734,30 +682,6 @@ if uploaded_file is not None:
                     st.success(
                         "Training baseline GRU berhasil!"
                     )
-
-        # ==============================================
-        # FORECAST
-        # ==============================================
-        elif menu == "Forecast":
-
-            st.subheader("🔮 Forecast")
-
-            st.info(
-                "Forecast akan ditambahkan berikutnya."
-            )
-
-        # ==============================================
-        # PREDICT VS ACTUAL
-        # ==============================================
-        elif menu == "Grafik Predict vs Actual":
-
-            st.subheader(
-                "📉 Grafik Predict vs Actual"
-            )
-
-            st.info(
-                "Grafik predict vs actual akan ditambahkan berikutnya."
-            )
 
     except Exception as e:
 
