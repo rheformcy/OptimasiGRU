@@ -172,10 +172,20 @@ if uploaded_file is not None:
 
                 df_preview = df.copy()
 
-            st.dataframe(
-                df_preview.head(),
-                use_container_width=True
-            )
+            # Hilangkan jam pada tanggal
+if "Tanggal" in outliers.columns:
+
+    outliers = outliers.copy()
+
+    outliers["Tanggal"] = pd.to_datetime(
+        outliers["Tanggal"],
+        errors='coerce'
+    ).dt.date
+
+st.dataframe(
+    outliers,
+    use_container_width=True
+)
 
         # ==============================================
         # STATISTIKA DESKRIPTIF
