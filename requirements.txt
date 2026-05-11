@@ -1,9 +1,2 @@
 streamlit
 pandas
-numpy
-matplotlib
-seaborn
-tensorflow-cpu
-scikit-learn
-pyswarms
-openpyxl
