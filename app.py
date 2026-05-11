@@ -41,32 +41,32 @@ st.sidebar.caption(
 # ======================================================
 st.sidebar.header("📌 Pilihan Analisis")
 
-check_stat = st.sidebar.checkbox(
-    "Statistika Deskriptif"
+btn_stat = st.sidebar.button(
+    "📊 Statistika Deskriptif"
 )
 
-check_plot = st.sidebar.checkbox(
-    "Visualisasi Time Series Plot"
+btn_plot = st.sidebar.button(
+    "📈 Visualisasi Time Series Plot"
 )
 
-check_missing = st.sidebar.checkbox(
-    "Cek Missing Values"
+btn_missing = st.sidebar.button(
+    "🧩 Cek Missing Values"
 )
 
-check_outlier = st.sidebar.checkbox(
-    "Cek Outliers"
+btn_outlier = st.sidebar.button(
+    "🚨 Cek Outliers"
 )
 
-check_baseline = st.sidebar.checkbox(
-    "Baseline Model (GRU-Adam)"
+btn_baseline = st.sidebar.button(
+    "🤖 Baseline Model (GRU-Adam)"
 )
 
-check_forecast = st.sidebar.checkbox(
-    "Forecast"
+btn_forecast = st.sidebar.button(
+    "🔮 Forecast"
 )
 
-check_compare = st.sidebar.checkbox(
-    "Grafik Perbandingan Predict vs Actual"
+btn_compare = st.sidebar.button(
+    "📉 Grafik Predict vs Actual"
 )
 
 # ======================================================
@@ -246,6 +246,146 @@ else:
 
     st.info(
         "📂 Silakan upload file Excel terlebih dahulu."
+    )
+
+# ======================================================
+# ANALISIS DATA
+# ======================================================
+if btn_stat:
+
+    st.subheader("📊 Statistika Deskriptif")
+
+    st.write(df.describe())
+
+# ======================================================
+# TIME SERIES PLOT
+# ======================================================
+if btn_plot:
+
+    st.subheader("📈 Visualisasi Time Series Plot")
+
+    if "Tanggal" in df.columns and "Terakhir" in df.columns:
+
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots(figsize=(12, 5))
+
+        ax.plot(
+            pd.to_datetime(df["Tanggal"]),
+            df["Terakhir"]
+        )
+
+        ax.set_xlabel("Tanggal")
+        ax.set_ylabel("Harga")
+        ax.set_title("Time Series Harga Emas")
+
+        st.pyplot(fig)
+
+    else:
+
+        st.warning(
+            "Kolom 'Tanggal' dan 'Terakhir' tidak ditemukan."
+        )
+
+# ======================================================
+# MISSING VALUE
+# ======================================================
+if btn_missing:
+
+    st.subheader("🧩 Cek Missing Values")
+
+    missing_df = pd.DataFrame({
+        "Kolom": df.columns,
+        "Jumlah Missing": df.isnull().sum().values
+    })
+
+    st.dataframe(
+        missing_df,
+        use_container_width=True
+    )
+
+# ======================================================
+# OUTLIER
+# ======================================================
+if btn_outlier:
+
+    st.subheader("🚨 Deteksi Outliers (Metode IQR)")
+
+    if "Terakhir" in df.columns:
+
+        Q1 = df["Terakhir"].quantile(0.25)
+        Q3 = df["Terakhir"].quantile(0.75)
+
+        IQR = Q3 - Q1
+
+        lower_bound = Q1 - (1.5 * IQR)
+        upper_bound = Q3 + (1.5 * IQR)
+
+        outliers = df[
+            (df["Terakhir"] < lower_bound) |
+            (df["Terakhir"] > upper_bound)
+        ]
+
+        st.write(f"Jumlah Outlier: {len(outliers)}")
+
+        st.dataframe(
+            outliers,
+            use_container_width=True
+        )
+
+    else:
+
+        st.warning(
+            "Kolom 'Terakhir' tidak ditemukan."
+        )
+
+# ======================================================
+# BASELINE MODEL
+# ======================================================
+if btn_baseline:
+
+    st.subheader("🤖 Baseline Model (GRU-Adam)")
+
+    st.info(
+        """
+        Baseline model menggunakan:
+        
+        - Optimizer : Adam
+        - Loss Function : Mean Squared Error (MSE)
+        - Activation : tanh
+        - Dense Output : linear
+        """
+    )
+
+# ======================================================
+# FORECAST
+# ======================================================
+if btn_forecast:
+
+    st.subheader("🔮 Forecast")
+
+    st.info(
+        """
+        Forecast digunakan untuk memprediksi
+        harga emas pada periode mendatang
+        berdasarkan pola historis data.
+        """
+    )
+
+# ======================================================
+# PREDICT VS ACTUAL
+# ======================================================
+if btn_compare:
+
+    st.subheader("📉 Grafik Predict vs Actual")
+
+    st.info(
+        """
+        Grafik ini digunakan untuk membandingkan:
+        
+        - Data aktual
+        - Data hasil prediksi model
+        """
     )
 
 # ======================================================
