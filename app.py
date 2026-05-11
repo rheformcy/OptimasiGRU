@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 
 # ======================================================
 # KONFIGURASI HALAMAN
@@ -23,7 +24,7 @@ Statistika UNDIP
 st.divider()
 
 # ======================================================
-# SIDEBAR
+# SIDEBAR - UPLOAD FILE
 # ======================================================
 st.sidebar.header("📂 Upload Dataset")
 
@@ -37,7 +38,7 @@ st.sidebar.caption(
 )
 
 # ======================================================
-# PILIHAN ANALISIS
+# SIDEBAR - MENU ANALISIS
 # ======================================================
 st.sidebar.header("📌 Pilihan Analisis")
 
@@ -54,8 +55,9 @@ menu = st.sidebar.radio(
         "Grafik Predict vs Actual"
     ]
 )
+
 # ======================================================
-# PARAMETER GRU-PSO
+# SIDEBAR - PARAMETER GRU PSO
 # ======================================================
 st.sidebar.header("⚙️ Optimasi GRU-PSO")
 
@@ -134,21 +136,50 @@ if uploaded_file is not None:
     try:
 
         # ==============================================
-        # MEMBACA FILE
+        # MEMBACA FILE EXCEL
         # ==============================================
         df = pd.read_excel(uploaded_file)
 
+        # Hapus spasi nama kolom
         df.columns = df.columns.str.strip()
 
+        # Bersihkan missing value palsu
+        df = df.replace(r'^\s*$', pd.NA, regex=True)
+
+        df.replace(
+            ["-", "?", "null", "NULL"],
+            pd.NA,
+            inplace=True
+        )
+
         # ==============================================
-        # MENU ANALISIS
+        # PREVIEW DATASET
         # ==============================================
         if menu == "Preview Dataset":
 
             st.subheader("📄 Preview Dataset")
 
-            st.dataframe(df.head())
+            if "Tanggal" in df.columns:
 
+                df_preview = df.copy()
+
+                df_preview["Tanggal"] = pd.to_datetime(
+                    df_preview["Tanggal"],
+                    errors='coerce'
+                ).dt.date
+
+            else:
+
+                df_preview = df.copy()
+
+            st.dataframe(
+                df_preview.head(),
+                use_container_width=True
+            )
+
+        # ==============================================
+        # STATISTIKA DESKRIPTIF
+        # ==============================================
         elif menu == "Statistika Deskriptif":
 
             st.subheader("📊 Statistika Deskriptif")
@@ -158,262 +189,253 @@ if uploaded_file is not None:
             )
 
             st.dataframe(
-                numeric_df.describe()
+                numeric_df.describe(),
+                use_container_width=True
             )
 
+        # ==============================================
+        # VISUALISASI TIME SERIES
+        # ==============================================
         elif menu == "Visualisasi Time Series Plot":
 
             st.subheader(
                 "📈 Visualisasi Time Series Plot"
             )
 
-            st.write("Nanti isi plot di sini")
+            if (
+                "Tanggal" in df.columns and
+                "Terakhir" in df.columns
+            ):
 
+                fig, ax = plt.subplots(
+                    figsize=(12, 5)
+                )
+
+                ax.plot(
+                    pd.to_datetime(
+                        df["Tanggal"]
+                    ).dt.date,
+
+                    df["Terakhir"]
+                )
+
+                ax.set_xlabel("Tanggal")
+                ax.set_ylabel("Harga")
+                ax.set_title(
+                    "Time Series Harga Emas"
+                )
+
+                st.pyplot(fig)
+
+            else:
+
+                st.warning(
+                    "Kolom 'Tanggal' dan "
+                    "'Terakhir' tidak ditemukan."
+                )
+
+        # ==============================================
+        # CEK MISSING VALUE
+        # ==============================================
         elif menu == "Cek Missing Values":
 
             st.subheader(
                 "🧩 Cek Missing Values"
             )
 
-            st.write(df.isnull().sum())
+            missing_df = pd.DataFrame({
+                "Kolom": df.columns,
+                "Jumlah Missing":
+                df.isnull().sum().values
+            })
 
+            st.dataframe(
+                missing_df,
+                use_container_width=True
+            )
+
+        # ==============================================
+        # CEK OUTLIER
+        # ==============================================
         elif menu == "Cek Outliers":
 
             st.subheader(
-                "🚨 Cek Outliers"
+                "🚨 Deteksi Outliers (IQR)"
             )
 
-            st.write("Nanti isi outlier")
+            if "Terakhir" in df.columns:
 
+                Q1 = df["Terakhir"].quantile(0.25)
+
+                Q3 = df["Terakhir"].quantile(0.75)
+
+                IQR = Q3 - Q1
+
+                lower_bound = (
+                    Q1 - (1.5 * IQR)
+                )
+
+                upper_bound = (
+                    Q3 + (1.5 * IQR)
+                )
+
+                outliers = df[
+                    (
+                        df["Terakhir"]
+                        < lower_bound
+                    ) |
+                    (
+                        df["Terakhir"]
+                        > upper_bound
+                    )
+                ]
+
+                st.write(
+                    f"""
+                    Jumlah Outlier:
+                    {len(outliers)}
+                    """
+                )
+
+                st.dataframe(
+                    outliers,
+                    use_container_width=True
+                )
+
+            else:
+
+                st.warning(
+                    "Kolom 'Terakhir' "
+                    "tidak ditemukan."
+                )
+
+        # ==============================================
+        # BASELINE MODEL
+        # ==============================================
         elif menu == "Baseline Model (GRU-Adam)":
 
             st.subheader(
-                "🤖 Baseline Model"
+                "🤖 Baseline Model (GRU-Adam)"
             )
 
+            st.info(
+                """
+                Baseline model menggunakan:
+
+                • Optimizer : Adam  
+                • Loss Function : MSE  
+                • Activation : tanh  
+                • Output Layer : Dense linear
+                """
+            )
+
+        # ==============================================
+        # FORECAST
+        # ==============================================
         elif menu == "Forecast":
 
-            st.subheader(
-                "🔮 Forecast"
+            st.subheader("🔮 Forecast")
+
+            st.info(
+                """
+                Forecast digunakan untuk
+                memprediksi harga emas
+                periode berikutnya
+                menggunakan model GRU.
+                """
             )
 
+        # ==============================================
+        # PREDICT VS ACTUAL
+        # ==============================================
         elif menu == "Grafik Predict vs Actual":
 
             st.subheader(
-                "📉 Predict vs Actual"
+                "📉 Grafik Predict vs Actual"
+            )
+
+            st.info(
+                """
+                Grafik ini membandingkan:
+
+                • Data aktual  
+                • Data hasil prediksi model
+                """
             )
 
     except Exception as e:
 
-        st.error(f"Terjadi error: {e}")
+        st.error(
+            f"❌ Terjadi error: {e}"
+        )
 
 else:
 
     st.info(
-        "Silakan upload file Excel terlebih dahulu."
-    )
-# ==============================================
-# PREVIEW DATASET
-# ==============================================
-if menu == "Preview Dataset":
-
-    st.subheader("📄 Preview Dataset")
-
-    # Hilangkan jam pada tanggal
-    if "Tanggal" in df.columns:
-
-        df_preview = df.copy()
-
-        df_preview["Tanggal"] = pd.to_datetime(
-            df_preview["Tanggal"]
-        ).dt.date
-
-    else:
-
-        df_preview = df.copy()
-
-    st.dataframe(
-        df_preview.head(),
-        use_container_width=True
-    )
-
-# ==============================================
-# STATISTIKA DESKRIPTIF
-# ==============================================
-elif menu == "Statistika Deskriptif":
-
-    st.subheader("📊 Statistika Deskriptif")
-
-    # Ambil hanya numerik
-    numeric_df = df.select_dtypes(
-        include=['int64', 'float64']
-    )
-
-    st.dataframe(
-        numeric_df.describe(),
-        use_container_width=True
-    )
-
-# ==============================================
-# TIME SERIES PLOT
-# ==============================================
-elif menu == "Visualisasi Time Series Plot":
-
-    st.subheader("📈 Visualisasi Time Series Plot")
-
-    if "Tanggal" in df.columns and "Terakhir" in df.columns:
-
-        import matplotlib.pyplot as plt
-
-        fig, ax = plt.subplots(figsize=(12, 5))
-
-        ax.plot(
-            pd.to_datetime(df["Tanggal"]).dt.date,
-            df["Terakhir"]
-        )
-
-        ax.set_xlabel("Tanggal")
-        ax.set_ylabel("Harga")
-        ax.set_title("Time Series Harga Emas")
-
-        st.pyplot(fig)
-
-    else:
-
-        st.warning(
-            "Kolom 'Tanggal' dan 'Terakhir' tidak ditemukan."
-        )
-
-# ==============================================
-# MISSING VALUE
-# ==============================================
-elif menu == "Cek Missing Values":
-
-    st.subheader("🧩 Cek Missing Values")
-
-    missing_df = pd.DataFrame({
-        "Kolom": df.columns,
-        "Jumlah Missing": df.isnull().sum().values
-    })
-
-    st.dataframe(
-        missing_df,
-        use_container_width=True
-    )
-
-# ==============================================
-# OUTLIER
-# ==============================================
-elif menu == "Cek Outliers":
-
-    st.subheader("🚨 Deteksi Outliers (IQR Method)")
-
-    if "Terakhir" in df.columns:
-
-        Q1 = df["Terakhir"].quantile(0.25)
-        Q3 = df["Terakhir"].quantile(0.75)
-
-        IQR = Q3 - Q1
-
-        lower_bound = Q1 - (1.5 * IQR)
-        upper_bound = Q3 + (1.5 * IQR)
-
-        outliers = df[
-            (df["Terakhir"] < lower_bound) |
-            (df["Terakhir"] > upper_bound)
-        ]
-
-        st.write(
-            f"Jumlah Outlier: {len(outliers)}"
-        )
-
-        st.dataframe(
-            outliers,
-            use_container_width=True
-        )
-
-    else:
-
-        st.warning(
-            "Kolom 'Terakhir' tidak ditemukan."
-        )
-
-# ==============================================
-# BASELINE
-# ==============================================
-elif menu == "Baseline Model (GRU-Adam)":
-
-    st.subheader("🤖 Baseline Model (GRU-Adam)")
-
-    st.info(
-        """
-        Baseline model menggunakan:
-        
-        • Optimizer : Adam  
-        • Loss Function : MSE  
-        • Activation : tanh  
-        • Output Layer : Dense linear
-        """
-    )
-
-# ==============================================
-# FORECAST
-# ==============================================
-elif menu == "Forecast":
-
-    st.subheader("🔮 Forecast")
-
-    st.info(
-        """
-        Forecast digunakan untuk memprediksi
-        harga emas periode berikutnya
-        menggunakan model GRU.
-        """
-    )
-
-# ==============================================
-# PREDICT VS ACTUAL
-# ==============================================
-elif menu == "Grafik Predict vs Actual":
-
-    st.subheader("📉 Grafik Predict vs Actual")
-
-    st.info(
-        """
-        Grafik ini membandingkan:
-        
-        • Data aktual  
-        • Data hasil prediksi model
-        """
+        "📂 Silakan upload "
+        "file Excel terlebih dahulu."
     )
 
 # ======================================================
-# INFORMASI PARAMETER
+# INFORMASI PARAMETER MODEL
 # ======================================================
 if run_btn:
 
     st.divider()
 
-    st.subheader("📌 Konfigurasi Model")
+    st.subheader(
+        "📌 Konfigurasi Model"
+    )
 
     col1, col2 = st.columns(2)
 
     with col1:
 
-        st.write(f"**Iterasi PSO:** {iterasi}")
-        st.write(f"**Particle:** {particle}")
-        st.write(f"**Epoch:** {epoch}")
-        st.write(f"**Learning Rate:** {learning_rate}")
-        st.write(f"**Batch Size:** {batch_size}")
+        st.write(
+            f"**Iterasi PSO:** {iterasi}"
+        )
+
+        st.write(
+            f"**Particle:** {particle}"
+        )
+
+        st.write(
+            f"**Epoch:** {epoch}"
+        )
+
+        st.write(
+            f"""
+            **Learning Rate:**
+            {learning_rate}
+            """
+        )
+
+        st.write(
+            f"**Batch Size:** {batch_size}"
+        )
 
     with col2:
 
-        st.write(f"**Dropout:** {dropout}")
-        st.write(f"**Layer:** {layer}")
-        st.write(f"**Units:** {units}")
-        st.write(f"**Timestep:** {timestep}")
+        st.write(
+            f"**Dropout:** {dropout}"
+        )
+
+        st.write(
+            f"**Layer:** {layer}"
+        )
+
+        st.write(
+            f"**Units:** {units}"
+        )
+
+        st.write(
+            f"**Timestep:** {timestep}"
+        )
 
     st.success(
-        "UI berhasil dijalankan. "
-        "Tahap selanjutnya tinggal integrasi model GRU-PSO."
+        """
+        UI berhasil dijalankan.
+        Tahap selanjutnya tinggal
+        integrasi model GRU-PSO.
+        """
     )
