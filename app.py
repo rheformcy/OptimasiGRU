@@ -371,6 +371,23 @@ if uploaded_file is not None:
                     tf.keras.backend.clear_session()
 
                     # ======================================
+                    # FIXED PARAMETER BASELINE
+                    # ======================================
+                    GS_epoch = 100
+
+                    GS_batch = 64
+
+                    GS_units = 50
+
+                    GS_layers = 1
+
+                    GS_dropout = 0.2
+
+                    GS_LR = 0.0001
+
+                    GS_window = timestep
+
+                    # ======================================
                     # SET SEED
                     # ======================================
                     SEED = 49
@@ -413,13 +430,13 @@ if uploaded_file is not None:
                     y = []
 
                     for i in range(
-                        timestep,
+                        GS_window,
                         len(scaled_data)
                     ):
 
                         X.append(
                             scaled_data[
-                                i-timestep:i
+                                i-GS_window:i
                             ]
                         )
 
@@ -432,7 +449,7 @@ if uploaded_file is not None:
                     y = np.array(y)
 
                     split_idx = (
-                        n_train - timestep
+                        n_train - GS_window
                     )
 
                     X_train = X[:split_idx]
@@ -470,7 +487,7 @@ if uploaded_file is not None:
                     model.add(
                         Input(
                             shape=(
-                                timestep,
+                                GS_window,
                                 1
                             )
                         )
@@ -479,17 +496,17 @@ if uploaded_file is not None:
                     # ======================================
                     # SINGLE LAYER
                     # ======================================
-                    if layer == 1:
+                    if GS_layers == 1:
 
                         model.add(
                             GRU(
-                                units=units,
+                                units=GS_units,
                                 activation='tanh'
                             )
                         )
 
                         model.add(
-                            Dropout(dropout)
+                            Dropout(GS_dropout)
                         )
 
                     # ======================================
@@ -497,15 +514,15 @@ if uploaded_file is not None:
                     # ======================================
                     else:
 
-                        for i in range(layer):
+                        for i in range(GS_layers):
 
                             is_last = (
-                                i == layer - 1
+                                i == GS_layers - 1
                             )
 
                             model.add(
                                 GRU(
-                                    units=units,
+                                    units=GS_units,
                                     return_sequences=(
                                         not is_last
                                     ),
@@ -514,11 +531,11 @@ if uploaded_file is not None:
                             )
 
                             model.add(
-                                Dropout(dropout)
+                                Dropout(GS_dropout)
                             )
 
                     # ======================================
-                    # OUTPUT
+                    # OUTPUT LAYER
                     # ======================================
                     model.add(
                         Dense(
@@ -532,8 +549,7 @@ if uploaded_file is not None:
                     # ======================================
                     model.compile(
                         optimizer=Adam(
-                            learning_rate=
-                            learning_rate
+                            learning_rate=GS_LR
                         ),
                         loss='mse'
                     )
@@ -553,8 +569,8 @@ if uploaded_file is not None:
                     history = model.fit(
                         X_train,
                         y_train,
-                        epochs=epoch,
-                        batch_size=batch_size,
+                        epochs=GS_epoch,
+                        batch_size=GS_batch,
                         validation_split=0.2,
                         callbacks=[early_stop],
                         verbose=1
@@ -620,6 +636,43 @@ if uploaded_file is not None:
                     col3.metric(
                         "MAPE",
                         f"{mape:.4f}%"
+                    )
+
+                    # ======================================
+                    # PARAMETER MODEL
+                    # ======================================
+                    st.subheader(
+                        "⚙️ Parameter Baseline"
+                    )
+
+                    param_df = pd.DataFrame({
+
+                        "Parameter": [
+
+                            "Epoch",
+                            "Batch Size",
+                            "Units",
+                            "Layer",
+                            "Dropout",
+                            "Learning Rate",
+                            "Timestep"
+                        ],
+
+                        "Value": [
+
+                            GS_epoch,
+                            GS_batch,
+                            GS_units,
+                            GS_layers,
+                            GS_dropout,
+                            GS_LR,
+                            GS_window
+                        ]
+                    })
+
+                    st.dataframe(
+                        param_df,
+                        use_container_width=True
                     )
 
                     # ======================================
