@@ -1196,5 +1196,3 @@ else:
     st.info(
         "📂 Silakan upload file Excel terlebih dahulu."
     )
-
-jadi gimana yaah tolong?
