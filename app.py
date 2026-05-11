@@ -398,7 +398,7 @@ if uploaded_file is not None:
                     GS_epoch = 100
                     GS_batch = 64
                     GS_units = 50
-                    GS_dropout = 0.2
+                    GS_dropout = 0.3
                     GS_lr = 0.0001
 
                     # ======================================
