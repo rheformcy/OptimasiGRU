@@ -265,59 +265,71 @@ st.dataframe(
             )
 
         # ==============================================
-        # CEK OUTLIER
-        # ==============================================
-        elif menu == "Cek Outliers":
+# CEK OUTLIER
+# ==============================================
+elif menu == "Cek Outliers":
 
-            st.subheader(
-                "🚨 Deteksi Outliers (IQR)"
+    st.subheader(
+        "🚨 Deteksi Outliers (IQR)"
+    )
+
+    if "Terakhir" in df.columns:
+
+        Q1 = df["Terakhir"].quantile(0.25)
+
+        Q3 = df["Terakhir"].quantile(0.75)
+
+        IQR = Q3 - Q1
+
+        lower_bound = (
+            Q1 - (1.5 * IQR)
+        )
+
+        upper_bound = (
+            Q3 + (1.5 * IQR)
+        )
+
+        outliers = df[
+            (
+                df["Terakhir"]
+                < lower_bound
+            ) |
+            (
+                df["Terakhir"]
+                > upper_bound
             )
+        ]
 
-            if "Terakhir" in df.columns:
+        # ======================================
+        # HILANGKAN JAM PADA TANGGAL
+        # ======================================
+        if "Tanggal" in outliers.columns:
 
-                Q1 = df["Terakhir"].quantile(0.25)
+            outliers = outliers.copy()
 
-                Q3 = df["Terakhir"].quantile(0.75)
+            outliers["Tanggal"] = pd.to_datetime(
+                outliers["Tanggal"],
+                errors='coerce'
+            ).dt.date
 
-                IQR = Q3 - Q1
+        st.write(
+            f"""
+            Jumlah Outlier:
+            {len(outliers)}
+            """
+        )
 
-                lower_bound = (
-                    Q1 - (1.5 * IQR)
-                )
+        st.dataframe(
+            outliers,
+            use_container_width=True
+        )
 
-                upper_bound = (
-                    Q3 + (1.5 * IQR)
-                )
+    else:
 
-                outliers = df[
-                    (
-                        df["Terakhir"]
-                        < lower_bound
-                    ) |
-                    (
-                        df["Terakhir"]
-                        > upper_bound
-                    )
-                ]
-
-                st.write(
-                    f"""
-                    Jumlah Outlier:
-                    {len(outliers)}
-                    """
-                )
-
-                st.dataframe(
-                    outliers,
-                    use_container_width=True
-                )
-
-            else:
-
-                st.warning(
-                    "Kolom 'Terakhir' "
-                    "tidak ditemukan."
-                )
+        st.warning(
+            "Kolom 'Terakhir' "
+            "tidak ditemukan."
+        )
 
         # ==============================================
         # BASELINE MODEL
