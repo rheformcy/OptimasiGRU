@@ -41,34 +41,19 @@ st.sidebar.caption(
 # ======================================================
 st.sidebar.header("📌 Pilihan Analisis")
 
-btn_stat = st.sidebar.button(
-    "📊 Statistika Deskriptif"
+menu = st.sidebar.radio(
+    "Pilih Menu",
+    [
+        "Preview Dataset",
+        "Statistika Deskriptif",
+        "Visualisasi Time Series Plot",
+        "Cek Missing Values",
+        "Cek Outliers",
+        "Baseline Model (GRU-Adam)",
+        "Forecast",
+        "Grafik Predict vs Actual"
+    ]
 )
-
-btn_plot = st.sidebar.button(
-    "📈 Visualisasi Time Series Plot"
-)
-
-btn_missing = st.sidebar.button(
-    "🧩 Cek Missing Values"
-)
-
-btn_outlier = st.sidebar.button(
-    "🚨 Cek Outliers"
-)
-
-btn_baseline = st.sidebar.button(
-    "🤖 Baseline Model (GRU-Adam)"
-)
-
-btn_forecast = st.sidebar.button(
-    "🔮 Forecast"
-)
-
-btn_compare = st.sidebar.button(
-    "📉 Grafik Predict vs Actual"
-)
-
 # ======================================================
 # PARAMETER GRU-PSO
 # ======================================================
@@ -183,84 +168,56 @@ if uploaded_file is not None:
                 df.isnull().sum().sum()
             )
 
-        # ==============================================
-        # PREVIEW DATA
-        # ==============================================
-        st.subheader("📄 Preview Dataset")
+        # ======================================================
+# HALAMAN ANALISIS
+# ======================================================
 
-        st.dataframe(
-            df.head(),
-            use_container_width=True
-        )
+# ==============================================
+# PREVIEW DATASET
+# ==============================================
+if menu == "Preview Dataset":
 
-        # ==============================================
-        # INFORMASI TIPE DATA
-        # ==============================================
-        st.subheader("📌 Tipe Data")
+    st.subheader("📄 Preview Dataset")
 
-        dtype_df = pd.DataFrame({
-            "Kolom": df.columns,
-            "Tipe Data": df.dtypes.astype(str)
-        })
+    # Hilangkan jam pada tanggal
+    if "Tanggal" in df.columns:
 
-        st.dataframe(
-            dtype_df,
-            use_container_width=True
-        )
+        df_preview = df.copy()
 
-        # ==============================================
-        # VALIDASI KOLOM
-        # ==============================================
-        required_cols = [
-            "Tanggal",
-            "Terakhir"
-        ]
+        df_preview["Tanggal"] = pd.to_datetime(
+            df_preview["Tanggal"]
+        ).dt.date
 
-        missing_cols = [
-            col for col in required_cols
-            if col not in df.columns
-        ]
+    else:
 
-        if len(missing_cols) > 0:
+        df_preview = df.copy()
 
-            st.error(
-                f"""
-                Kolom berikut tidak ditemukan:
-                {missing_cols}
-                """
-            )
-
-        else:
-
-            st.success(
-                "✅ Kolom 'Tanggal' dan 'Terakhir' tersedia"
-            )
-
-    except Exception as e:
-
-        st.error(
-            f"❌ Terjadi error saat membaca file: {e}"
-        )
-
-else:
-
-    st.info(
-        "📂 Silakan upload file Excel terlebih dahulu."
+    st.dataframe(
+        df_preview.head(),
+        use_container_width=True
     )
 
-# ======================================================
-# ANALISIS DATA
-# ======================================================
-if btn_stat:
+# ==============================================
+# STATISTIKA DESKRIPTIF
+# ==============================================
+elif menu == "Statistika Deskriptif":
 
     st.subheader("📊 Statistika Deskriptif")
 
-    st.write(df.describe())
+    # Ambil hanya numerik
+    numeric_df = df.select_dtypes(
+        include=['int64', 'float64']
+    )
 
-# ======================================================
+    st.dataframe(
+        numeric_df.describe(),
+        use_container_width=True
+    )
+
+# ==============================================
 # TIME SERIES PLOT
-# ======================================================
-if btn_plot:
+# ==============================================
+elif menu == "Visualisasi Time Series Plot":
 
     st.subheader("📈 Visualisasi Time Series Plot")
 
@@ -271,7 +228,7 @@ if btn_plot:
         fig, ax = plt.subplots(figsize=(12, 5))
 
         ax.plot(
-            pd.to_datetime(df["Tanggal"]),
+            pd.to_datetime(df["Tanggal"]).dt.date,
             df["Terakhir"]
         )
 
@@ -287,10 +244,10 @@ if btn_plot:
             "Kolom 'Tanggal' dan 'Terakhir' tidak ditemukan."
         )
 
-# ======================================================
+# ==============================================
 # MISSING VALUE
-# ======================================================
-if btn_missing:
+# ==============================================
+elif menu == "Cek Missing Values":
 
     st.subheader("🧩 Cek Missing Values")
 
@@ -304,12 +261,12 @@ if btn_missing:
         use_container_width=True
     )
 
-# ======================================================
+# ==============================================
 # OUTLIER
-# ======================================================
-if btn_outlier:
+# ==============================================
+elif menu == "Cek Outliers":
 
-    st.subheader("🚨 Deteksi Outliers (Metode IQR)")
+    st.subheader("🚨 Deteksi Outliers (IQR Method)")
 
     if "Terakhir" in df.columns:
 
@@ -326,7 +283,9 @@ if btn_outlier:
             (df["Terakhir"] > upper_bound)
         ]
 
-        st.write(f"Jumlah Outlier: {len(outliers)}")
+        st.write(
+            f"Jumlah Outlier: {len(outliers)}"
+        )
 
         st.dataframe(
             outliers,
@@ -339,10 +298,10 @@ if btn_outlier:
             "Kolom 'Terakhir' tidak ditemukan."
         )
 
-# ======================================================
-# BASELINE MODEL
-# ======================================================
-if btn_baseline:
+# ==============================================
+# BASELINE
+# ==============================================
+elif menu == "Baseline Model (GRU-Adam)":
 
     st.subheader("🤖 Baseline Model (GRU-Adam)")
 
@@ -350,41 +309,41 @@ if btn_baseline:
         """
         Baseline model menggunakan:
         
-        - Optimizer : Adam
-        - Loss Function : Mean Squared Error (MSE)
-        - Activation : tanh
-        - Dense Output : linear
+        • Optimizer : Adam  
+        • Loss Function : MSE  
+        • Activation : tanh  
+        • Output Layer : Dense linear
         """
     )
 
-# ======================================================
+# ==============================================
 # FORECAST
-# ======================================================
-if btn_forecast:
+# ==============================================
+elif menu == "Forecast":
 
     st.subheader("🔮 Forecast")
 
     st.info(
         """
         Forecast digunakan untuk memprediksi
-        harga emas pada periode mendatang
-        berdasarkan pola historis data.
+        harga emas periode berikutnya
+        menggunakan model GRU.
         """
     )
 
-# ======================================================
+# ==============================================
 # PREDICT VS ACTUAL
-# ======================================================
-if btn_compare:
+# ==============================================
+elif menu == "Grafik Predict vs Actual":
 
     st.subheader("📉 Grafik Predict vs Actual")
 
     st.info(
         """
-        Grafik ini digunakan untuk membandingkan:
+        Grafik ini membandingkan:
         
-        - Data aktual
-        - Data hasil prediksi model
+        • Data aktual  
+        • Data hasil prediksi model
         """
     )
 
