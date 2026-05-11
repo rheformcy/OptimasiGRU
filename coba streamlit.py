@@ -3,16 +3,15 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import matplotlib.dates as mdates
-import matplotlib.ticker as ticker
-from datetime import datetime, timedelta
 import tensorflow as tf
-from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import GRU, Dense, Dropout, Input
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.backend import clear_session
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+import pyswarms as ps
+from pyswarms.single.global_best import GlobalBestPSO
 import gc
 
 # ==========================================
@@ -21,136 +20,151 @@ import gc
 st.set_page_config(page_title="OptimasGRU - Gold Forecasting", layout="wide")
 
 st.title("📊 Sistem Prediksi Harga Emas (GRU & PSO)")
-st.markdown("Aplikasi untuk membandingkan performa model **GRU Standar** dan **GRU yang dioptimasi PSO**.")
+st.markdown("Aplikasi untuk membandingkan performa model **GRU Standar** dan **GRU-PSO**.")
 
 # --- SIDEBAR ---
 st.sidebar.header("1. Data Input")
 uploaded_file = st.sidebar.file_uploader("Upload Data Historis", type=["xlsx", "xls"])
-st.sidebar.caption("⚠️ File harus berupa format Excel (.xlsx atau .xls)")
 
 st.sidebar.header("2. Analisis Data")
 show_stat = st.sidebar.checkbox("Stat Deskriptif Data")
 show_plot = st.sidebar.checkbox("Plot Time Series Data")
 show_missing = st.sidebar.checkbox("Cek Missing Value & Outlier")
 
-st.sidebar.header("3. Hyperparameter Model")
+st.sidebar.header("3. Hyperparameter & Window")
+input_window = st.sidebar.number_input("Window Size (Timestep)", min_value=1, max_value=30, value=1)
 
-# Baseline Model (Fixed)
-with st.sidebar.expander("Baseline Model (Fixed Parameters)"):
-    st.info("Units: 50, LR: 0.0001, Batch: 64, Epoch: 100, Dropout: 0.5")
-
-# Tuning GRU-PSO
 with st.sidebar.expander("Tuning GRU-PSO"):
-    input_lr = st.number_input("Learning Rate", value=0.001, format="%.4f")
-    input_units = st.slider("GRU Units", 16, 128, 50)
-    input_batch = st.select_slider("Batch Size", options=[16, 32, 64, 128], value=64)
-    input_epoch = st.number_input("Epochs", value=50)
-    input_pso_particles = st.number_input("PSO Particles", value=40)
-    input_pso_iters = st.number_input("PSO Iterations", value=10)
+    input_lr_range = st.slider("Range Learning Rate", 0.0001, 0.01, (0.0001, 0.01), format="%.4f")
+    input_pso_particles = st.number_input("PSO Particles", value=10) # Dikecilkan agar deploy cepat
+    input_pso_iters = st.number_input("PSO Iterations", value=5)
 
 run_model = st.sidebar.button("🚀 Mulai Proses Training & Prediksi")
 
 # ==========================================
-# 2. FUNGSI HELPER (LOGIKA CODING)
+# 2. FUNGSI LOGIKA (FITNESS FUNCTION PSO)
 # ==========================================
+def build_model(units, lr, dropout, window):
+    model = Sequential([
+        Input(shape=(window, 1)),
+        GRU(units=int(units), activation='tanh'),
+        Dropout(dropout),
+        Dense(1)
+    ])
+    model.compile(optimizer=Adam(learning_rate=lr), loss='mse')
+    return model
 
-def windowing_data(data, window=1):
-    X, y = [], []
-    for i in range(window, len(data)):
-        X.append(data[i-window:i])
-        y.append(data[i])
-    return np.array(X), np.array(y)
+def f_fitness(particles, X_tr, y_tr, X_va, y_va, scaler_y, window):
+    costs = []
+    for p in particles:
+        units, lr, batch, dropout = int(p[0]), p[1], int(p[2]), p[3]
+        clear_session()
+        model = build_model(units, lr, dropout, window)
+        model.fit(X_tr, y_tr, epochs=5, batch_size=batch, verbose=0) # Epoch kecil untuk optimasi
+        
+        y_pred = model.predict(X_va, verbose=0)
+        y_pred_inv = scaler_y.inverse_transform(y_pred)
+        y_true_inv = scaler_y.inverse_transform(y_va.reshape(-1,1))
+        costs.append(mean_squared_error(y_true_inv, y_pred_inv))
+    return np.array(costs)
 
 # ==========================================
-# 3. PROSES DATA (MAIN)
+# 3. MAIN PROSES
 # ==========================================
-
 if uploaded_file is not None:
-    # A. Load & Clean Data
     emas = pd.read_excel(uploaded_file)
-    emas = emas[['Tanggal', 'Terakhir']]
-    emas.dropna(inplace=True)
+    emas = emas[['Tanggal', 'Terakhir']].dropna()
     emas['Tanggal'] = pd.to_datetime(emas['Tanggal'], dayfirst=True)
     emas = emas.sort_values(by='Tanggal')
-    
-    # B. Tampilan Analisis (Checklist)
+
     if show_stat:
         st.subheader("📌 Statistik Deskriptif")
         st.write(emas['Terakhir'].describe())
 
     if show_plot:
-        st.subheader("📈 Plot Time Series Harga Emas")
-        plt.figure(figsize=(12, 5))
-        plt.plot(emas['Tanggal'], emas['Terakhir'], color='#1A5276', linewidth=2)
-        plt.grid(True, axis='y', linestyle=':', alpha=0.5)
-        st.pyplot(plt)
+        st.subheader("📈 Plot Time Series")
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.plot(emas['Tanggal'], emas['Terakhir'], color='#1A5276')
+        st.pyplot(fig)
 
-    if show_missing:
-        st.subheader("🔍 Missing Value & Outlier")
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            st.write("Jumlah Missing Value:")
-            st.write(emas.isnull().sum())
-        with col_m2:
-            st.write("Visualisasi Boxplot:")
-            fig2, ax2 = plt.subplots()
-            sns.boxplot(x=emas['Terakhir'], color='gold', ax=ax2)
-            st.pyplot(fig2)
-
-    # C. Eksekusi Model
     if run_model:
         st.divider()
-        st.header("Results Analysis")
         
-        # 1. Preprocessing (Scaling & Splitting)
+        # Preprocessing
         values = emas[['Terakhir']].values
         n_train = int(len(values) * 0.8)
+        train_data = values[:n_train]
         
-        scaler = MinMaxScaler().fit(values[:n_train])
-        scaled_data = scaler.transform(values)
+        scaler = MinMaxScaler().fit(train_data)
+        scaled_values = scaler.transform(values)
         
-        X_all, y_all = windowing_data(scaled_data, window=1)
+        # Windowing
+        X, y = [], []
+        for i in range(input_window, len(scaled_values)):
+            X.append(scaled_values[i-input_window:i])
+            y.append(scaled_values[i])
+        X, y = np.array(X), np.array(y)
         
-        dtrain_end = n_train - 1
-        X_train = X_all[:dtrain_end]
-        y_train = y_all[:dtrain_end]
-        X_test = X_all[dtrain_end:]
-        y_test = y_all[dtrain_end:]
+        split = n_train - input_window
+        X_train, y_train = X[:split], y[:split]
+        X_test, y_test = X[split:], y[split:]
         
-        # Tampilan Tab
-        tab1, tab2 = st.tabs(["Baseline Model (Standard)", "GRU-PSO Optimized"])
-        
-        # --- TAB 1: BASELINE ---
+        tab1, tab2 = st.tabs(["Baseline Model", "GRU-PSO Optimized"])
+
+        # --- BASELINE ---
         with tab1:
-            st.subheader("Baseline GRU Performance")
-            with st.spinner('Training Baseline Model...'):
-                # --- LOGIKA MODEL BASELINE DI SINI ---
-                # (Sesuai parameter tetap: 50 units, 0.0001 LR, dll)
-                # dummy_metrics
-                st.success("Training Baseline Selesai!")
-                st.metric("MAPE Baseline", "1.54%") 
-
-        # --- TAB 2: GRU-PSO ---
-        with tab2:
-            st.subheader("GRU-PSO Optimized Performance")
-            with st.spinner('Running PSO Optimization (This may take a while)...'):
-                # --- LOGIKA MODEL GRU-PSO DI SINI ---
-                # Gunakan: input_lr, input_units, input_batch, input_pso_particles
-                st.write(f"Iterasi PSO: {input_pso_iters} | Partikel: {input_pso_particles}")
+            with st.spinner('Training Baseline...'):
+                model_b = build_model(50, 0.0001, 0.5, input_window)
+                model_b.fit(X_train, y_train, epochs=50, batch_size=64, verbose=0)
                 
-                # Setelah training, tampilkan hasil evaluasi
-                st.success("Optimasi PSO Selesai!")
-                st.metric("MAPE GRU-PSO", "1.24%", delta="-0.30% (Better)")
+                y_p = model_b.predict(X_test)
+                y_p_inv = scaler.inverse_transform(y_p)
+                y_t_inv = scaler.inverse_transform(y_test)
+                
+                mape_b = mean_absolute_percentage_error(y_t_inv, y_p_inv) * 100
+                st.metric("MAPE Baseline", f"{mape_b:.2f}%")
+                
+                fig_b, ax_b = plt.subplots()
+                ax_b.plot(y_t_inv, label="Aktual")
+                ax_b.plot(y_p_inv, label="Prediksi", linestyle="--")
+                plt.legend()
+                st.pyplot(fig_b)
 
-        # BAGIAN FORECAST AKAN KAMU TAMBAH DI SINI
-        st.write("---")
-        st.info("💡 Kamu bisa menambahkan tombol 'Forecast 5 Hari ke Depan' di bawah ini.")
+        # --- GRU-PSO ---
+        with tab2:
+            with st.spinner('Running PSO Optimization...'):
+                # PSO Bounds: [units, lr, batch, dropout]
+                lower_b = [16, input_lr_range[0], 16, 0.1]
+                upper_b = [128, input_lr_range[1], 128, 0.5]
+                bounds = (np.array(lower_b), np.array(upper_b))
+
+                optimizer = GlobalBestPSO(n_particles=int(input_pso_particles), 
+                                          dimensions=4, 
+                                          options={'c1': 2.0, 'c2': 2.0, 'w': 0.7}, 
+                                          bounds=bounds)
+                
+                # Eksekusi PSO
+                best_cost, best_pos = optimizer.optimize(f_fitness, iters=int(input_pso_iters), 
+                                                         X_tr=X_train, y_tr=y_train, 
+                                                         X_va=X_test, y_va=y_test, 
+                                                         scaler_y=scaler, window=input_window)
+                
+                # Re-train model terbaik
+                model_pso = build_model(best_pos[0], best_pos[1], best_pos[3], input_window)
+                model_pso.fit(X_train, y_train, epochs=50, batch_size=int(best_pos[2]), verbose=0)
+                
+                y_p_pso = model_pso.predict(X_test)
+                y_p_pso_inv = scaler.inverse_transform(y_p_pso)
+                
+                mape_pso = mean_absolute_percentage_error(y_t_inv, y_p_pso_inv) * 100
+                st.success(f"Best Params: Units={int(best_pos[0])}, LR={best_pos[1]:.4f}")
+                st.metric("MAPE GRU-PSO", f"{mape_pso:.2f}%", delta=f"{mape_pso-mape_b:.2f}%")
+                
+                fig_p, ax_p = plt.subplots()
+                ax_p.plot(y_t_inv, label="Aktual")
+                ax_p.plot(y_p_pso_inv, label="Prediksi PSO", color="red")
+                plt.legend()
+                st.pyplot(fig_p)
 
 else:
-    st.warning("Silakan upload file Excel harga emas untuk memulai.")
-
-# ==========================================
-# 4. FOOTER
-# ==========================================
-st.sidebar.markdown("---")
-st.sidebar.caption("Project by Rhena Amelia Shafitry - UNDIP 2022")
+    st.warning("Upload file Excel dulu di samping!")
