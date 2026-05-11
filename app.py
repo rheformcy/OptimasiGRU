@@ -172,20 +172,10 @@ if uploaded_file is not None:
 
                 df_preview = df.copy()
 
-            # Hilangkan jam pada tanggal
-if "Tanggal" in outliers.columns:
-
-    outliers = outliers.copy()
-
-    outliers["Tanggal"] = pd.to_datetime(
-        outliers["Tanggal"],
-        errors='coerce'
-    ).dt.date
-
-st.dataframe(
-    outliers,
-    use_container_width=True
-)
+            st.dataframe(
+                df_preview.head(),
+                use_container_width=True
+            )
 
         # ==============================================
         # STATISTIKA DESKRIPTIF
@@ -265,71 +255,69 @@ st.dataframe(
             )
 
         # ==============================================
-# CEK OUTLIER
-# ==============================================
-elif menu == "Cek Outliers":
+        # CEK OUTLIER
+        # ==============================================
+        elif menu == "Cek Outliers":
 
-    st.subheader(
-        "🚨 Deteksi Outliers (IQR)"
-    )
-
-    if "Terakhir" in df.columns:
-
-        Q1 = df["Terakhir"].quantile(0.25)
-
-        Q3 = df["Terakhir"].quantile(0.75)
-
-        IQR = Q3 - Q1
-
-        lower_bound = (
-            Q1 - (1.5 * IQR)
-        )
-
-        upper_bound = (
-            Q3 + (1.5 * IQR)
-        )
-
-        outliers = df[
-            (
-                df["Terakhir"]
-                < lower_bound
-            ) |
-            (
-                df["Terakhir"]
-                > upper_bound
+            st.subheader(
+                "🚨 Deteksi Outliers (IQR)"
             )
-        ]
 
-        # ======================================
-        # HILANGKAN JAM PADA TANGGAL
-        # ======================================
-        if "Tanggal" in outliers.columns:
+            if "Terakhir" in df.columns:
 
-            outliers = outliers.copy()
+                Q1 = df["Terakhir"].quantile(0.25)
 
-            outliers["Tanggal"] = pd.to_datetime(
-                outliers["Tanggal"],
-                errors='coerce'
-            ).dt.date
+                Q3 = df["Terakhir"].quantile(0.75)
 
-        st.write(
-            f"""
-            Jumlah Outlier:
-            {len(outliers)}
-            """
-        )
+                IQR = Q3 - Q1
 
-        st.dataframe(
-            outliers,
-            use_container_width=True
-        )
+                lower_bound = (
+                    Q1 - (1.5 * IQR)
+                )
 
-    else:
+                upper_bound = (
+                    Q3 + (1.5 * IQR)
+                )
 
-        st.warning(
-            "Kolom 'Terakhir' "
-            "tidak ditemukan."
-        )
+                outliers = df[
+                    (
+                        df["Terakhir"]
+                        < lower_bound
+                    ) |
+                    (
+                        df["Terakhir"]
+                        > upper_bound
+                    )
+                ]
+
+                # Hilangkan jam pada tanggal
+                if "Tanggal" in outliers.columns:
+
+                    outliers = outliers.copy()
+
+                    outliers["Tanggal"] = pd.to_datetime(
+                        outliers["Tanggal"],
+                        errors='coerce'
+                    ).dt.date
+
+                st.write(
+                    f"""
+                    Jumlah Outlier:
+                    {len(outliers)}
+                    """
+                )
+
+                st.dataframe(
+                    outliers,
+                    use_container_width=True
+                )
+
+            else:
+
+                st.warning(
+                    "Kolom 'Terakhir' "
+                    "tidak ditemukan."
+                )
 
         # ==============================================
         # BASELINE MODEL
@@ -426,10 +414,7 @@ if run_btn:
         )
 
         st.write(
-            f"""
-            **Learning Rate:**
-            {learning_rate}
-            """
+            f"**Learning Rate:** {learning_rate}"
         )
 
         st.write(
