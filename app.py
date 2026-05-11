@@ -1,6 +1,32 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+import random
+
+from sklearn.preprocessing import MinMaxScaler
+
+from sklearn.metrics import (
+    mean_squared_error,
+    mean_absolute_error,
+    mean_absolute_percentage_error
+)
+
+from tensorflow.keras.models import Sequential
+
+from tensorflow.keras.layers import (
+    GRU,
+    Dense,
+    Dropout,
+    Input
+)
+
+from tensorflow.keras.optimizers import Adam
+
+from tensorflow.keras.callbacks import (
+    EarlyStopping
+)
 
 # ======================================================
 # KONFIGURASI HALAMAN
@@ -57,7 +83,7 @@ menu = st.sidebar.radio(
 )
 
 # ======================================================
-# SIDEBAR - PARAMETER GRU PSO
+# SIDEBAR - PARAMETER
 # ======================================================
 st.sidebar.header("⚙️ Optimasi GRU-PSO")
 
@@ -136,15 +162,17 @@ if uploaded_file is not None:
     try:
 
         # ==============================================
-        # MEMBACA FILE EXCEL
+        # MEMBACA FILE
         # ==============================================
         df = pd.read_excel(uploaded_file)
 
-        # Hapus spasi nama kolom
         df.columns = df.columns.str.strip()
 
-        # Bersihkan missing value palsu
-        df = df.replace(r'^\s*$', pd.NA, regex=True)
+        df = df.replace(
+            r'^\s*$',
+            pd.NA,
+            regex=True
+        )
 
         df.replace(
             ["-", "?", "null", "NULL"],
@@ -194,7 +222,7 @@ if uploaded_file is not None:
             )
 
         # ==============================================
-        # VISUALISASI TIME SERIES
+        # TIME SERIES PLOT
         # ==============================================
         elif menu == "Visualisasi Time Series Plot":
 
@@ -235,7 +263,7 @@ if uploaded_file is not None:
                 )
 
         # ==============================================
-        # CEK MISSING VALUE
+        # MISSING VALUE
         # ==============================================
         elif menu == "Cek Missing Values":
 
@@ -255,7 +283,7 @@ if uploaded_file is not None:
             )
 
         # ==============================================
-        # CEK OUTLIER
+        # OUTLIER
         # ==============================================
         elif menu == "Cek Outliers":
 
@@ -290,7 +318,6 @@ if uploaded_file is not None:
                     )
                 ]
 
-                # Hilangkan jam pada tanggal
                 if "Tanggal" in outliers.columns:
 
                     outliers = outliers.copy()
@@ -301,10 +328,7 @@ if uploaded_file is not None:
                     ).dt.date
 
                 st.write(
-                    f"""
-                    Jumlah Outlier:
-                    {len(outliers)}
-                    """
+                    f"Jumlah Outlier: {len(outliers)}"
                 )
 
                 st.dataframe(
@@ -315,560 +339,401 @@ if uploaded_file is not None:
             else:
 
                 st.warning(
-                    "Kolom 'Terakhir' "
-                    "tidak ditemukan."
+                    "Kolom 'Terakhir' tidak ditemukan."
                 )
 
         # ==============================================
-# BASELINE MODEL
-# ==============================================
-elif menu == "Baseline Model (GRU-Adam)":
+        # BASELINE MODEL
+        # ==============================================
+        elif menu == "Baseline Model (GRU-Adam)":
 
-    st.subheader(
-        "🤖 Baseline Model (GRU-Adam)"
-    )
-
-    # ==========================================
-    # IMPORT
-    # ==========================================
-    import numpy as np
-    import tensorflow as tf
-    import random
-
-    from sklearn.preprocessing import MinMaxScaler
-
-    from sklearn.metrics import (
-        mean_squared_error,
-        mean_absolute_error,
-        mean_absolute_percentage_error
-    )
-
-    from tensorflow.keras.models import Sequential
-
-    from tensorflow.keras.layers import (
-        GRU,
-        Dense,
-        Dropout,
-        Input
-    )
-
-    from tensorflow.keras.optimizers import Adam
-
-    from tensorflow.keras.callbacks import (
-        EarlyStopping
-    )
-
-    # ==========================================
-    # VALIDASI KOLOM
-    # ==========================================
-    if "Terakhir" not in df.columns:
-
-        st.warning(
-            "Kolom 'Terakhir' tidak ditemukan."
-        )
-
-    else:
-
-        with st.spinner(
-            "Training baseline GRU..."
-        ):
-
-            # ==================================
-            # SET SEED
-            # ==================================
-            SEED = 49
-
-            random.seed(SEED)
-
-            np.random.seed(SEED)
-
-            tf.random.set_seed(SEED)
-
-            # ==================================
-            # SPLIT DATA
-            # ==================================
-            feature_cols = ["Terakhir"]
-
-            target_col = "Terakhir"
-
-            data_features = (
-                df[feature_cols].values
+            st.subheader(
+                "🤖 Baseline Model (GRU-Adam)"
             )
 
-            data_target = (
-                df[[target_col]].values
-            )
+            if "Terakhir" not in df.columns:
 
-            values = (
-                df[['Terakhir']].values
-            )
+                st.warning(
+                    "Kolom 'Terakhir' tidak ditemukan."
+                )
 
-            n = len(values)
+            else:
 
-            n_train = int(n * 0.8)
-
-            # ==================================
-            # SCALING
-            # ==================================
-            scaler_X = MinMaxScaler().fit(
-                data_features[:n_train]
-            )
-
-            scaler_y = MinMaxScaler().fit(
-                data_target[:n_train]
-            )
-
-            Xs = scaler_X.transform(
-                data_features
-            )
-
-            ys = scaler_y.transform(
-                data_target
-            )
-
-            # ==================================
-            # WINDOW / TIMESTEP
-            # ==================================
-            GS_window = timestep
-
-            # ==================================
-            # WINDOWING FUNCTION
-            # ==================================
-            def make_sequences(
-                X_scaled,
-                y_scaled,
-                window
-            ):
-
-                X_seq = []
-
-                y_seq = []
-
-                for i in range(
-                    window,
-                    len(X_scaled)
+                with st.spinner(
+                    "Training baseline GRU..."
                 ):
 
-                    X_seq.append(
-                        X_scaled[
-                            i-window:i
-                        ]
+                    # ==================================
+                    # SEED
+                    # ==================================
+                    SEED = 49
+
+                    random.seed(SEED)
+
+                    np.random.seed(SEED)
+
+                    tf.random.set_seed(SEED)
+
+                    # ==================================
+                    # SPLIT DATA
+                    # ==================================
+                    feature_cols = ["Terakhir"]
+
+                    target_col = "Terakhir"
+
+                    data_features = (
+                        df[feature_cols].values
                     )
 
-                    y_seq.append(
-                        y_scaled[i]
+                    data_target = (
+                        df[[target_col]].values
                     )
 
-                return (
-                    np.array(X_seq),
-                    np.array(y_seq)
-                )
+                    values = (
+                        df[['Terakhir']].values
+                    )
 
-            # ==================================
-            # MEMBUAT SEQUENCE
-            # ==================================
-            X_seq_all, y_seq_all = (
-                make_sequences(
-                    Xs,
-                    ys,
-                    window=GS_window
-                )
-            )
+                    n = len(values)
 
-            dtrain_end = (
-                n_train - GS_window
-            )
+                    n_train = int(n * 0.8)
 
-            X_train = (
-                X_seq_all[:dtrain_end]
-            )
+                    # ==================================
+                    # SCALING
+                    # ==================================
+                    scaler_X = MinMaxScaler().fit(
+                        data_features[:n_train]
+                    )
 
-            y_train = (
-                y_seq_all[:dtrain_end]
-            )
+                    scaler_y = MinMaxScaler().fit(
+                        data_target[:n_train]
+                    )
 
-            X_test = (
-                X_seq_all[dtrain_end:]
-            )
+                    Xs = scaler_X.transform(
+                        data_features
+                    )
 
-            y_test = (
-                y_seq_all[dtrain_end:]
-            )
+                    ys = scaler_y.transform(
+                        data_target
+                    )
 
-            # ==================================
-            # RESHAPE INPUT GRU
-            # ==================================
-            X_train = X_train.reshape(
-                (
-                    X_train.shape[0],
-                    X_train.shape[1],
-                    1
-                )
-            )
+                    # ==================================
+                    # WINDOW
+                    # ==================================
+                    GS_window = timestep
 
-            X_test = X_test.reshape(
-                (
-                    X_test.shape[0],
-                    X_test.shape[1],
-                    1
-                )
-            )
+                    # ==================================
+                    # WINDOWING
+                    # ==================================
+                    def make_sequences(
+                        X_scaled,
+                        y_scaled,
+                        window
+                    ):
 
-            # ==================================
-            # INFORMASI SHAPE
-            # ==================================
-            st.subheader(
-                "📊 Shape Dataset"
-            )
+                        X_seq = []
 
-            col1, col2 = st.columns(2)
+                        y_seq = []
 
-            col1.write(
-                f"""
-                X_train Shape:
-                {X_train.shape}
-                """
-            )
-
-            col2.write(
-                f"""
-                X_test Shape:
-                {X_test.shape}
-                """
-            )
-
-            # ==================================
-            # PARAMETER MODEL
-            # ==================================
-            GS_epoch = epoch
-
-            GS_batch = batch_size
-
-            GS_units = units
-
-            GS_layers = layer
-
-            GS_dropout = dropout
-
-            GS_LR = learning_rate
-
-            # ==================================
-            # BUILD MODEL
-            # ==================================
-            def build_gru_model(
-                units,
-                layers,
-                dropout,
-                lr,
-                window
-            ):
-
-                n_features = 1
-
-                model = Sequential()
-
-                model.add(
-                    Input(
-                        shape=(
+                        for i in range(
                             window,
-                            n_features
+                            len(X_scaled)
+                        ):
+
+                            X_seq.append(
+                                X_scaled[
+                                    i-window:i
+                                ]
+                            )
+
+                            y_seq.append(
+                                y_scaled[i]
+                            )
+
+                        return (
+                            np.array(X_seq),
+                            np.array(y_seq)
+                        )
+
+                    X_seq_all, y_seq_all = (
+                        make_sequences(
+                            Xs,
+                            ys,
+                            window=GS_window
                         )
                     )
-                )
 
-                # ==============================
-                # SINGLE LAYER
-                # ==============================
-                if layers == 1:
+                    dtrain_end = (
+                        n_train - GS_window
+                    )
 
-                    model.add(
-                        GRU(
-                            units=units,
-                            activation='tanh'
+                    X_train = (
+                        X_seq_all[:dtrain_end]
+                    )
+
+                    y_train = (
+                        y_seq_all[:dtrain_end]
+                    )
+
+                    X_test = (
+                        X_seq_all[dtrain_end:]
+                    )
+
+                    y_test = (
+                        y_seq_all[dtrain_end:]
+                    )
+
+                    # ==================================
+                    # RESHAPE
+                    # ==================================
+                    X_train = X_train.reshape(
+                        (
+                            X_train.shape[0],
+                            X_train.shape[1],
+                            1
                         )
                     )
 
-                    model.add(
-                        Dropout(dropout)
+                    X_test = X_test.reshape(
+                        (
+                            X_test.shape[0],
+                            X_test.shape[1],
+                            1
+                        )
                     )
 
-                # ==============================
-                # MULTI LAYER
-                # ==============================
-                else:
+                    # ==================================
+                    # PARAMETER MODEL
+                    # ==================================
+                    GS_epoch = epoch
 
-                    for i in range(layers):
+                    GS_batch = batch_size
 
-                        is_last = (
-                            i == layers - 1
-                        )
+                    GS_units = units
+
+                    GS_layers = layer
+
+                    GS_dropout = dropout
+
+                    GS_LR = learning_rate
+
+                    # ==================================
+                    # BUILD MODEL
+                    # ==================================
+                    def build_gru_model():
+
+                        model = Sequential()
 
                         model.add(
-                            GRU(
-                                units=units,
-                                return_sequences=(
-                                    not is_last
-                                ),
-                                activation='tanh'
+                            Input(
+                                shape=(
+                                    GS_window,
+                                    1
+                                )
                             )
                         )
 
+                        if GS_layers == 1:
+
+                            model.add(
+                                GRU(
+                                    units=GS_units,
+                                    activation='tanh'
+                                )
+                            )
+
+                            model.add(
+                                Dropout(GS_dropout)
+                            )
+
+                        else:
+
+                            for i in range(
+                                GS_layers
+                            ):
+
+                                is_last = (
+                                    i == GS_layers - 1
+                                )
+
+                                model.add(
+                                    GRU(
+                                        units=GS_units,
+                                        return_sequences=(
+                                            not is_last
+                                        ),
+                                        activation='tanh'
+                                    )
+                                )
+
+                                model.add(
+                                    Dropout(
+                                        GS_dropout
+                                    )
+                                )
+
                         model.add(
-                            Dropout(dropout)
+                            Dense(
+                                1,
+                                activation='linear'
+                            )
                         )
 
-                # ==============================
-                # OUTPUT LAYER
-                # ==============================
-                model.add(
-                    Dense(
-                        units=1,
-                        activation='linear'
+                        model.compile(
+                            optimizer=Adam(
+                                learning_rate=GS_LR
+                            ),
+                            loss='mse'
+                        )
+
+                        return model
+
+                    # ==================================
+                    # TRAINING
+                    # ==================================
+                    gru_standar = build_gru_model()
+
+                    early_stop = EarlyStopping(
+                        monitor='val_loss',
+                        patience=7,
+                        restore_best_weights=True
                     )
-                )
 
-                # ==============================
-                # COMPILE MODEL
-                # ==============================
-                model.compile(
-                    optimizer=Adam(
-                        learning_rate=GS_LR
-                    ),
-                    loss='mse'
-                )
+                    history = gru_standar.fit(
+                        X_train,
+                        y_train,
+                        epochs=GS_epoch,
+                        batch_size=GS_batch,
+                        validation_split=0.2,
+                        callbacks=[early_stop],
+                        verbose=0
+                    )
 
-                return model
+                    # ==================================
+                    # PREDIKSI
+                    # ==================================
+                    y_pred_scaled = (
+                        gru_standar.predict(
+                            X_test,
+                            verbose=0
+                        )
+                    )
 
-            # ==================================
-            # MEMBANGUN MODEL
-            # ==================================
-            gru_standar = (
-                build_gru_model(
-                    GS_units,
-                    GS_layers,
-                    GS_dropout,
-                    GS_LR,
-                    GS_window
-                )
-            )
+                    y_pred_inv = (
+                        scaler_y.inverse_transform(
+                            y_pred_scaled
+                        ).flatten()
+                    )
 
-            # ==================================
-            # EARLY STOPPING
-            # ==================================
-            early_stop = EarlyStopping(
-                monitor='val_loss',
-                patience=7,
-                restore_best_weights=True
-            )
+                    y_test_inv = (
+                        scaler_y.inverse_transform(
+                            y_test.reshape(-1, 1)
+                        ).flatten()
+                    )
 
-            # ==================================
-            # TRAINING MODEL
-            # ==================================
-            history = gru_standar.fit(
-                X_train,
-                y_train,
-                epochs=GS_epoch,
-                batch_size=GS_batch,
-                callbacks=[early_stop],
-                validation_split=0.2,
-                verbose=0
-            )
+                    # ==================================
+                    # METRICS
+                    # ==================================
+                    rmse = np.sqrt(
+                        mean_squared_error(
+                            y_test_inv,
+                            y_pred_inv
+                        )
+                    )
 
-            # ==================================
-            # PREDIKSI
-            # ==================================
-            y_pred_scaled = (
-                gru_standar.predict(
-                    X_test,
-                    verbose=0
-                )
-            )
+                    mae = mean_absolute_error(
+                        y_test_inv,
+                        y_pred_inv
+                    )
 
-            # ==================================
-            # INVERSE SCALING
-            # ==================================
-            y_pred_inv = (
-                scaler_y.inverse_transform(
-                    y_pred_scaled
-                ).flatten()
-            )
+                    mape = (
+                        mean_absolute_percentage_error(
+                            y_test_inv,
+                            y_pred_inv
+                        ) * 100
+                    )
 
-            y_test_inv = (
-                scaler_y.inverse_transform(
-                    y_test.reshape(-1, 1)
-                ).flatten()
-            )
+                    # ==================================
+                    # HASIL EVALUASI
+                    # ==================================
+                    st.subheader(
+                        "📊 Hasil Evaluasi"
+                    )
 
-            # ==================================
-            # EVALUASI MODEL
-            # ==================================
-            rmse = np.sqrt(
-                mean_squared_error(
-                    y_test_inv,
-                    y_pred_inv
-                )
-            )
+                    col1, col2, col3 = st.columns(3)
 
-            mae = mean_absolute_error(
-                y_test_inv,
-                y_pred_inv
-            )
+                    col1.metric(
+                        "RMSE",
+                        f"{rmse:,.2f}"
+                    )
 
-            mape = (
-                mean_absolute_percentage_error(
-                    y_test_inv,
-                    y_pred_inv
-                ) * 100
-            )
+                    col2.metric(
+                        "MAE",
+                        f"{mae:,.2f}"
+                    )
 
-            # ==================================
-            # METRICS
-            # ==================================
-            st.subheader(
-                "📊 Hasil Evaluasi"
-            )
+                    col3.metric(
+                        "MAPE",
+                        f"{mape:.4f}%"
+                    )
 
-            col1, col2, col3 = st.columns(3)
+                    # ==================================
+                    # PLOT LOSS
+                    # ==================================
+                    st.subheader(
+                        "📉 Training vs Validation Loss"
+                    )
 
-            col1.metric(
-                "RMSE",
-                f"{rmse:,.2f}"
-            )
+                    fig1, ax1 = plt.subplots(
+                        figsize=(10, 5)
+                    )
 
-            col2.metric(
-                "MAE",
-                f"{mae:,.2f}"
-            )
+                    ax1.plot(
+                        history.history['loss'],
+                        label='Training Loss'
+                    )
 
-            col3.metric(
-                "MAPE",
-                f"{mape:.4f}%"
-            )
+                    ax1.plot(
+                        history.history['val_loss'],
+                        label='Validation Loss'
+                    )
 
-            # ==================================
-            # TABEL HASIL
-            # ==================================
-            result_entry = {
+                    ax1.legend()
 
-                'Time_Step': GS_window,
+                    ax1.grid(alpha=0.3)
 
-                'Units': GS_units,
+                    st.pyplot(fig1)
 
-                'Layers': GS_layers,
+                    # ==================================
+                    # PLOT PREDIKSI
+                    # ==================================
+                    st.subheader(
+                        "📈 Aktual vs Prediksi"
+                    )
 
-                'Learning_Rate': GS_LR,
+                    fig2, ax2 = plt.subplots(
+                        figsize=(12, 6)
+                    )
 
-                'Batch_Size': GS_batch,
+                    ax2.plot(
+                        y_test_inv,
+                        label='Aktual'
+                    )
 
-                'Dropout': GS_dropout,
+                    ax2.plot(
+                        y_pred_inv,
+                        linestyle='--',
+                        label='Prediksi'
+                    )
 
-                'RMSE': round(rmse, 2),
+                    ax2.legend()
 
-                'MAE': round(mae, 2),
+                    ax2.grid(alpha=0.3)
 
-                'MAPE_%': round(mape, 4)
-            }
+                    st.pyplot(fig2)
 
-            result_df = pd.DataFrame(
-                [result_entry]
-            )
-
-            st.dataframe(
-                result_df,
-                use_container_width=True
-            )
-
-            # ==================================
-            # PLOT LOSS
-            # ==================================
-            st.subheader(
-                "📉 Training vs Validation Loss"
-            )
-
-            fig1, ax1 = plt.subplots(
-                figsize=(10, 5)
-            )
-
-            ax1.plot(
-                history.history['loss'],
-                label='Training Loss'
-            )
-
-            ax1.plot(
-                history.history['val_loss'],
-                label='Validation Loss'
-            )
-
-            ax1.set_title(
-                "Training vs Validation Loss"
-            )
-
-            ax1.set_xlabel(
-                "Epoch"
-            )
-
-            ax1.set_ylabel(
-                "Loss"
-            )
-
-            ax1.legend()
-
-            ax1.grid(
-                alpha=0.3
-            )
-
-            st.pyplot(fig1)
-
-            # ==================================
-            # PLOT AKTUAL VS PREDIKSI
-            # ==================================
-            st.subheader(
-                "📈 Aktual vs Prediksi"
-            )
-
-            fig2, ax2 = plt.subplots(
-                figsize=(12, 6)
-            )
-
-            ax2.plot(
-                y_test_inv,
-                label='Aktual',
-                linewidth=2
-            )
-
-            ax2.plot(
-                y_pred_inv,
-                linestyle='--',
-                linewidth=2,
-                label='Prediksi'
-            )
-
-            ax2.set_title(
-                "Aktual vs Prediksi GRU"
-            )
-
-            ax2.set_xlabel(
-                "Data Testing"
-            )
-
-            ax2.set_ylabel(
-                "Harga Emas"
-            )
-
-            ax2.legend()
-
-            ax2.grid(
-                alpha=0.3
-            )
-
-            st.pyplot(fig2)
-
-            # ==================================
-            # SUCCESS
-            # ==================================
-            st.success(
-                "Training baseline GRU berhasil!"
-            )
+                    st.success(
+                        "Training baseline GRU berhasil!"
+                    )
 
         # ==============================================
         # FORECAST
@@ -878,12 +743,7 @@ elif menu == "Baseline Model (GRU-Adam)":
             st.subheader("🔮 Forecast")
 
             st.info(
-                """
-                Forecast digunakan untuk
-                memprediksi harga emas
-                periode berikutnya
-                menggunakan model GRU.
-                """
+                "Forecast akan ditambahkan berikutnya."
             )
 
         # ==============================================
@@ -896,12 +756,7 @@ elif menu == "Baseline Model (GRU-Adam)":
             )
 
             st.info(
-                """
-                Grafik ini membandingkan:
-
-                • Data aktual  
-                • Data hasil prediksi model
-                """
+                "Grafik predict vs actual akan ditambahkan berikutnya."
             )
 
     except Exception as e:
@@ -913,67 +768,5 @@ elif menu == "Baseline Model (GRU-Adam)":
 else:
 
     st.info(
-        "📂 Silakan upload "
-        "file Excel terlebih dahulu."
-    )
-
-# ======================================================
-# INFORMASI PARAMETER MODEL
-# ======================================================
-if run_btn:
-
-    st.divider()
-
-    st.subheader(
-        "📌 Konfigurasi Model"
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.write(
-            f"**Iterasi PSO:** {iterasi}"
-        )
-
-        st.write(
-            f"**Particle:** {particle}"
-        )
-
-        st.write(
-            f"**Epoch:** {epoch}"
-        )
-
-        st.write(
-            f"**Learning Rate:** {learning_rate}"
-        )
-
-        st.write(
-            f"**Batch Size:** {batch_size}"
-        )
-
-    with col2:
-
-        st.write(
-            f"**Dropout:** {dropout}"
-        )
-
-        st.write(
-            f"**Layer:** {layer}"
-        )
-
-        st.write(
-            f"**Units:** {units}"
-        )
-
-        st.write(
-            f"**Timestep:** {timestep}"
-        )
-
-    st.success(
-        """
-        UI berhasil dijalankan.
-        Tahap selanjutnya tinggal
-        integrasi model GRU-PSO.
-        """
+        "📂 Silakan upload file Excel terlebih dahulu."
     )
