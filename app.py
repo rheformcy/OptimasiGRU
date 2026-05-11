@@ -320,23 +320,554 @@ if uploaded_file is not None:
                 )
 
         # ==============================================
-        # BASELINE MODEL
-        # ==============================================
-        elif menu == "Baseline Model (GRU-Adam)":
+# BASELINE MODEL
+# ==============================================
+elif menu == "Baseline Model (GRU-Adam)":
 
-            st.subheader(
-                "🤖 Baseline Model (GRU-Adam)"
+    st.subheader(
+        "🤖 Baseline Model (GRU-Adam)"
+    )
+
+    # ==========================================
+    # IMPORT
+    # ==========================================
+    import numpy as np
+    import tensorflow as tf
+    import random
+
+    from sklearn.preprocessing import MinMaxScaler
+
+    from sklearn.metrics import (
+        mean_squared_error,
+        mean_absolute_error,
+        mean_absolute_percentage_error
+    )
+
+    from tensorflow.keras.models import Sequential
+
+    from tensorflow.keras.layers import (
+        GRU,
+        Dense,
+        Dropout,
+        Input
+    )
+
+    from tensorflow.keras.optimizers import Adam
+
+    from tensorflow.keras.callbacks import (
+        EarlyStopping
+    )
+
+    # ==========================================
+    # VALIDASI KOLOM
+    # ==========================================
+    if "Terakhir" not in df.columns:
+
+        st.warning(
+            "Kolom 'Terakhir' tidak ditemukan."
+        )
+
+    else:
+
+        with st.spinner(
+            "Training baseline GRU..."
+        ):
+
+            # ==================================
+            # SET SEED
+            # ==================================
+            SEED = 49
+
+            random.seed(SEED)
+
+            np.random.seed(SEED)
+
+            tf.random.set_seed(SEED)
+
+            # ==================================
+            # SPLIT DATA
+            # ==================================
+            feature_cols = ["Terakhir"]
+
+            target_col = "Terakhir"
+
+            data_features = (
+                df[feature_cols].values
             )
 
-            st.info(
-                """
-                Baseline model menggunakan:
+            data_target = (
+                df[[target_col]].values
+            )
 
-                • Optimizer : Adam  
-                • Loss Function : MSE  
-                • Activation : tanh  
-                • Output Layer : Dense linear
+            values = (
+                df[['Terakhir']].values
+            )
+
+            n = len(values)
+
+            n_train = int(n * 0.8)
+
+            # ==================================
+            # SCALING
+            # ==================================
+            scaler_X = MinMaxScaler().fit(
+                data_features[:n_train]
+            )
+
+            scaler_y = MinMaxScaler().fit(
+                data_target[:n_train]
+            )
+
+            Xs = scaler_X.transform(
+                data_features
+            )
+
+            ys = scaler_y.transform(
+                data_target
+            )
+
+            # ==================================
+            # WINDOW / TIMESTEP
+            # ==================================
+            GS_window = timestep
+
+            # ==================================
+            # WINDOWING FUNCTION
+            # ==================================
+            def make_sequences(
+                X_scaled,
+                y_scaled,
+                window
+            ):
+
+                X_seq = []
+
+                y_seq = []
+
+                for i in range(
+                    window,
+                    len(X_scaled)
+                ):
+
+                    X_seq.append(
+                        X_scaled[
+                            i-window:i
+                        ]
+                    )
+
+                    y_seq.append(
+                        y_scaled[i]
+                    )
+
+                return (
+                    np.array(X_seq),
+                    np.array(y_seq)
+                )
+
+            # ==================================
+            # MEMBUAT SEQUENCE
+            # ==================================
+            X_seq_all, y_seq_all = (
+                make_sequences(
+                    Xs,
+                    ys,
+                    window=GS_window
+                )
+            )
+
+            dtrain_end = (
+                n_train - GS_window
+            )
+
+            X_train = (
+                X_seq_all[:dtrain_end]
+            )
+
+            y_train = (
+                y_seq_all[:dtrain_end]
+            )
+
+            X_test = (
+                X_seq_all[dtrain_end:]
+            )
+
+            y_test = (
+                y_seq_all[dtrain_end:]
+            )
+
+            # ==================================
+            # RESHAPE INPUT GRU
+            # ==================================
+            X_train = X_train.reshape(
+                (
+                    X_train.shape[0],
+                    X_train.shape[1],
+                    1
+                )
+            )
+
+            X_test = X_test.reshape(
+                (
+                    X_test.shape[0],
+                    X_test.shape[1],
+                    1
+                )
+            )
+
+            # ==================================
+            # INFORMASI SHAPE
+            # ==================================
+            st.subheader(
+                "📊 Shape Dataset"
+            )
+
+            col1, col2 = st.columns(2)
+
+            col1.write(
+                f"""
+                X_train Shape:
+                {X_train.shape}
                 """
+            )
+
+            col2.write(
+                f"""
+                X_test Shape:
+                {X_test.shape}
+                """
+            )
+
+            # ==================================
+            # PARAMETER MODEL
+            # ==================================
+            GS_epoch = epoch
+
+            GS_batch = batch_size
+
+            GS_units = units
+
+            GS_layers = layer
+
+            GS_dropout = dropout
+
+            GS_LR = learning_rate
+
+            # ==================================
+            # BUILD MODEL
+            # ==================================
+            def build_gru_model(
+                units,
+                layers,
+                dropout,
+                lr,
+                window
+            ):
+
+                n_features = 1
+
+                model = Sequential()
+
+                model.add(
+                    Input(
+                        shape=(
+                            window,
+                            n_features
+                        )
+                    )
+                )
+
+                # ==============================
+                # SINGLE LAYER
+                # ==============================
+                if layers == 1:
+
+                    model.add(
+                        GRU(
+                            units=units,
+                            activation='tanh'
+                        )
+                    )
+
+                    model.add(
+                        Dropout(dropout)
+                    )
+
+                # ==============================
+                # MULTI LAYER
+                # ==============================
+                else:
+
+                    for i in range(layers):
+
+                        is_last = (
+                            i == layers - 1
+                        )
+
+                        model.add(
+                            GRU(
+                                units=units,
+                                return_sequences=(
+                                    not is_last
+                                ),
+                                activation='tanh'
+                            )
+                        )
+
+                        model.add(
+                            Dropout(dropout)
+                        )
+
+                # ==============================
+                # OUTPUT LAYER
+                # ==============================
+                model.add(
+                    Dense(
+                        units=1,
+                        activation='linear'
+                    )
+                )
+
+                # ==============================
+                # COMPILE MODEL
+                # ==============================
+                model.compile(
+                    optimizer=Adam(
+                        learning_rate=GS_LR
+                    ),
+                    loss='mse'
+                )
+
+                return model
+
+            # ==================================
+            # MEMBANGUN MODEL
+            # ==================================
+            gru_standar = (
+                build_gru_model(
+                    GS_units,
+                    GS_layers,
+                    GS_dropout,
+                    GS_LR,
+                    GS_window
+                )
+            )
+
+            # ==================================
+            # EARLY STOPPING
+            # ==================================
+            early_stop = EarlyStopping(
+                monitor='val_loss',
+                patience=7,
+                restore_best_weights=True
+            )
+
+            # ==================================
+            # TRAINING MODEL
+            # ==================================
+            history = gru_standar.fit(
+                X_train,
+                y_train,
+                epochs=GS_epoch,
+                batch_size=GS_batch,
+                callbacks=[early_stop],
+                validation_split=0.2,
+                verbose=0
+            )
+
+            # ==================================
+            # PREDIKSI
+            # ==================================
+            y_pred_scaled = (
+                gru_standar.predict(
+                    X_test,
+                    verbose=0
+                )
+            )
+
+            # ==================================
+            # INVERSE SCALING
+            # ==================================
+            y_pred_inv = (
+                scaler_y.inverse_transform(
+                    y_pred_scaled
+                ).flatten()
+            )
+
+            y_test_inv = (
+                scaler_y.inverse_transform(
+                    y_test.reshape(-1, 1)
+                ).flatten()
+            )
+
+            # ==================================
+            # EVALUASI MODEL
+            # ==================================
+            rmse = np.sqrt(
+                mean_squared_error(
+                    y_test_inv,
+                    y_pred_inv
+                )
+            )
+
+            mae = mean_absolute_error(
+                y_test_inv,
+                y_pred_inv
+            )
+
+            mape = (
+                mean_absolute_percentage_error(
+                    y_test_inv,
+                    y_pred_inv
+                ) * 100
+            )
+
+            # ==================================
+            # METRICS
+            # ==================================
+            st.subheader(
+                "📊 Hasil Evaluasi"
+            )
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "RMSE",
+                f"{rmse:,.2f}"
+            )
+
+            col2.metric(
+                "MAE",
+                f"{mae:,.2f}"
+            )
+
+            col3.metric(
+                "MAPE",
+                f"{mape:.4f}%"
+            )
+
+            # ==================================
+            # TABEL HASIL
+            # ==================================
+            result_entry = {
+
+                'Time_Step': GS_window,
+
+                'Units': GS_units,
+
+                'Layers': GS_layers,
+
+                'Learning_Rate': GS_LR,
+
+                'Batch_Size': GS_batch,
+
+                'Dropout': GS_dropout,
+
+                'RMSE': round(rmse, 2),
+
+                'MAE': round(mae, 2),
+
+                'MAPE_%': round(mape, 4)
+            }
+
+            result_df = pd.DataFrame(
+                [result_entry]
+            )
+
+            st.dataframe(
+                result_df,
+                use_container_width=True
+            )
+
+            # ==================================
+            # PLOT LOSS
+            # ==================================
+            st.subheader(
+                "📉 Training vs Validation Loss"
+            )
+
+            fig1, ax1 = plt.subplots(
+                figsize=(10, 5)
+            )
+
+            ax1.plot(
+                history.history['loss'],
+                label='Training Loss'
+            )
+
+            ax1.plot(
+                history.history['val_loss'],
+                label='Validation Loss'
+            )
+
+            ax1.set_title(
+                "Training vs Validation Loss"
+            )
+
+            ax1.set_xlabel(
+                "Epoch"
+            )
+
+            ax1.set_ylabel(
+                "Loss"
+            )
+
+            ax1.legend()
+
+            ax1.grid(
+                alpha=0.3
+            )
+
+            st.pyplot(fig1)
+
+            # ==================================
+            # PLOT AKTUAL VS PREDIKSI
+            # ==================================
+            st.subheader(
+                "📈 Aktual vs Prediksi"
+            )
+
+            fig2, ax2 = plt.subplots(
+                figsize=(12, 6)
+            )
+
+            ax2.plot(
+                y_test_inv,
+                label='Aktual',
+                linewidth=2
+            )
+
+            ax2.plot(
+                y_pred_inv,
+                linestyle='--',
+                linewidth=2,
+                label='Prediksi'
+            )
+
+            ax2.set_title(
+                "Aktual vs Prediksi GRU"
+            )
+
+            ax2.set_xlabel(
+                "Data Testing"
+            )
+
+            ax2.set_ylabel(
+                "Harga Emas"
+            )
+
+            ax2.legend()
+
+            ax2.grid(
+                alpha=0.3
+            )
+
+            st.pyplot(fig2)
+
+            # ==================================
+            # SUCCESS
+            # ==================================
+            st.success(
+                "Training baseline GRU berhasil!"
             )
 
         # ==============================================
