@@ -381,7 +381,7 @@ if uploaded_file is not None:
 
                     GS_layers = 1
 
-                    GS_dropout = 0.2
+                    GS_dropout = 0.3
 
                     GS_LR = 0.0001
 
