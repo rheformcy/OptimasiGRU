@@ -499,8 +499,8 @@ if uploaded_file is not None:
                 history = model.fit(
                     X_tr,
                     y_tr,
-                    epochs=100,
-                    batch_size=64,
+                    epochs=50,
+                    batch_size=32,
                     validation_data=(
                         X_val,
                         y_val
