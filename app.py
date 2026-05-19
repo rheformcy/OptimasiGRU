@@ -1,1178 +1,267 @@
 import streamlit as st
+import tensorflow as tf
+import random
+import os
+
+SEED = 49
+tf.keras.utils.set_random_seed(SEED)
+tf.config.experimental.enable_op_determinism()
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import random
-import gc
-
-# ======================================================
-# SCIKIT LEARN
-# ======================================================
+import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+from keras.models import Sequential
+from keras.layers import Input, GRU, Dropout, Dense
+from keras.optimizers import Adam
+from keras.backend import clear_session
+import gc
+from pyswarms.single import GlobalBestPSO
 
-from sklearn.metrics import (
-    mean_squared_error,
-    mean_absolute_error,
-    mean_absolute_percentage_error
-)
+# ==========================================
+# 1. KUNCI ALL SEEDS DI AWAL SKRIP
+# ==========================================
+def reset_seeds(seed=SEED):
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+    tf.keras.utils.set_random_seed(seed)
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    tf.config.experimental.enable_op_determinism()
 
-# ======================================================
-# TENSORFLOW
-# ======================================================
-import tensorflow as tf
+st.title("Aplikasi Prediksi Harga Emas GRU-PSO")
 
-from tensorflow.keras.models import Sequential
+# Input File dari User
+uploaded_file = st.file_uploader("Unggah File Data Emas (.csv atau .xlsx)", type=["csv", "xlsx"])
 
-from tensorflow.keras.layers import (
-    GRU,
-    Dense,
-    Dropout,
-    Input
-)
-
-from tensorflow.keras.optimizers import Adam
-
-from tensorflow.keras.callbacks import (
-    EarlyStopping
-)
-
-from tensorflow.keras.backend import clear_session
-
-# ======================================================
-# PSO
-# ======================================================
-import pyswarms as ps
-
-# ======================================================
-# CLEAR SESSION
-# ======================================================
-clear_session()
-gc.collect()
-
-# ======================================================
-# KONFIGURASI HALAMAN
-# ======================================================
-st.set_page_config(
-    page_title="Optimasi GRU-PSO",
-    layout="wide"
-)
-
-# ======================================================
-# HEADER
-# ======================================================
-st.markdown("""
-# 📊 Optimasi Gated Recurrent Unit (GRU)
-
-### Rhena Amelia Shafitry  
-Statistika UNDIP  
-24050122120019
-""")
-
-st.divider()
-
-# ======================================================
-# SIDEBAR UPLOAD
-# ======================================================
-st.sidebar.header("📂 Upload Dataset")
-
-uploaded_file = st.sidebar.file_uploader(
-    "Upload File Excel",
-    type=["xlsx", "xls"]
-)
-
-# ======================================================
-# MENU
-# ======================================================
-st.sidebar.header("📌 Pilihan Analisis")
-
-menu = st.sidebar.radio(
-    "Pilih Menu",
-    [
-        "Preview Dataset",
-        "Statistika Deskriptif",
-        "Visualisasi Time Series Plot",
-        "Cek Missing Values",
-        "Cek Outliers",
-        "Baseline Model (GRU-Adam)",
-        "Optimasi GRU-PSO"
-    ]
-)
-
-# ======================================================
-# PARAMETER UMUM
-# ======================================================
-st.sidebar.header("⚙️ Parameter Model")
-
-timestep = st.sidebar.number_input(
-    "Timestep / Window Size",
-    min_value=1,
-    max_value=30,
-    value=1
-)
-
-# ======================================================
-# PARAMETER PSO
-# ======================================================
-st.sidebar.header("🚀 Parameter PSO")
-
-particle = st.sidebar.number_input(
-    "Jumlah Partikel",
-    min_value=1,
-    value=5
-)
-
-iterasi = st.sidebar.number_input(
-    "Jumlah Iterasi",
-    min_value=1,
-    value=3
-)
-
-epoch = st.sidebar.number_input(
-    "Epoch Final Training",
-    min_value=1,
-    value=30
-)
-
-layer = st.sidebar.number_input(
-    "Jumlah Layer GRU",
-    min_value=1,
-    max_value=3,
-    value=1
-)
-
-# ======================================================
-# RANGE UNITS
-# ======================================================
-st.sidebar.subheader("Range Units")
-
-units_min = st.sidebar.number_input(
-    "Units Minimum",
-    min_value=1,
-    value=8
-)
-
-units_max = st.sidebar.number_input(
-    "Units Maximum",
-    min_value=1,
-    value=128
-)
-
-# ======================================================
-# RANGE LEARNING RATE
-# ======================================================
-st.sidebar.subheader("Range Learning Rate")
-
-lr_min = st.sidebar.number_input(
-    "LR Minimum",
-    min_value=0.0001,
-    value=0.0001,
-    step=0.0001,
-    format="%.4f"
-)
-
-lr_max = st.sidebar.number_input(
-    "LR Maximum",
-    min_value=0.0001,
-    value=0.01,
-    step=0.0001,
-    format="%.4f"
-)
-
-# ======================================================
-# RANGE BATCH SIZE
-# ======================================================
-st.sidebar.subheader("Range Batch Size")
-
-batch_min = st.sidebar.number_input(
-    "Batch Minimum",
-    min_value=1,
-    value=8
-)
-
-batch_max = st.sidebar.number_input(
-    "Batch Maximum",
-    min_value=1,
-    value=128
-)
-
-# ======================================================
-# RANGE DROPOUT
-# ======================================================
-st.sidebar.subheader("Range Dropout")
-
-dropout_min = st.sidebar.slider(
-    "Dropout Minimum",
-    min_value=0.0,
-    max_value=0.9,
-    value=0.0,
-    step=0.1
-)
-
-dropout_max = st.sidebar.slider(
-    "Dropout Maximum",
-    min_value=0.0,
-    max_value=0.9,
-    value=0.5,
-    step=0.1
-)
-
-# ======================================================
-# MAIN PROGRAM
-# ======================================================
 if uploaded_file is not None:
-
-    try:
-
-        # ==================================================
-        # LOAD DATA
-        # ==================================================
-        df = pd.read_excel(uploaded_file)
-
-        df.columns = df.columns.str.strip()
-
-        df = df.replace(
-            r'^\s*$',
-            pd.NA,
-            regex=True
-        )
-
-        df.replace(
-            ["-", "?", "null", "NULL"],
-            pd.NA,
-            inplace=True
-        )
-
-        # ==================================================
-        # PREVIEW DATASET
-        # ==================================================
-        if menu == "Preview Dataset":
-
-            st.subheader("📄 Preview Dataset")
-
-            st.dataframe(
-                df.head(),
-                use_container_width=True
-            )
-
-        # ==================================================
-        # STATISTIKA DESKRIPTIF
-        # ==================================================
-        elif menu == "Statistika Deskriptif":
-
-            st.subheader("📊 Statistika Deskriptif")
-
-            numeric_df = df.select_dtypes(
-                include=['int64', 'float64']
-            )
-
-            st.dataframe(
-                numeric_df.describe(),
-                use_container_width=True
-            )
-
-        # ==================================================
-        # VISUALISASI
-        # ==================================================
-        elif menu == "Visualisasi Time Series Plot":
-
-            st.subheader("📈 Visualisasi Time Series Plot")
-
-            if (
-                "Tanggal" in df.columns and
-                "Terakhir" in df.columns
-            ):
-
-                fig, ax = plt.subplots(
-                    figsize=(12, 5)
-                )
-
-                ax.plot(
-                    pd.to_datetime(
-                        df["Tanggal"]
-                    ).dt.date,
-
-                    df["Terakhir"],
-                    linewidth=2
-                )
-
-                ax.set_title(
-                    "Time Series Harga Emas"
-                )
-
-                ax.grid(alpha=0.3)
-
-                st.pyplot(fig)
-
-        # ==================================================
-        # MISSING VALUE
-        # ==================================================
-        elif menu == "Cek Missing Values":
-
-            st.subheader("🧩 Missing Values")
-
-            missing_df = pd.DataFrame({
-
-                "Kolom":
-                df.columns,
-
-                "Jumlah Missing":
-                df.isnull().sum().values
-            })
-
-            st.dataframe(
-                missing_df,
-                use_container_width=True
-            )
-
-        # ==================================================
-        # OUTLIER
-        # ==================================================
-        elif menu == "Cek Outliers":
-
-            st.subheader("🚨 Deteksi Outlier")
-
-            if "Terakhir" in df.columns:
-
-                Q1 = df["Terakhir"].quantile(0.25)
-
-                Q3 = df["Terakhir"].quantile(0.75)
-
-                IQR = Q3 - Q1
-
-                lower = Q1 - 1.5 * IQR
-
-                upper = Q3 + 1.5 * IQR
-
-                outliers = df[
-                    (
-                        df["Terakhir"] < lower
-                    ) |
-                    (
-                        df["Terakhir"] > upper
-                    )
-                ]
-
-                st.write(
-                    f"Jumlah Outlier: {len(outliers)}"
-                )
-
-                st.dataframe(
-                    outliers,
-                    use_container_width=True
-                )
-
-        # ==================================================
-        # BASELINE GRU
-        # ==================================================
-        elif menu == "Baseline Model (GRU-Adam)":
-
-            st.subheader("🤖 Baseline Model (GRU-Adam)")
-
-            if "Terakhir" not in df.columns:
-
-                st.warning(
-                    "Kolom 'Terakhir' tidak ditemukan."
-                )
-
-            else:
-
-                with st.spinner(
-                    "Training baseline GRU..."
-                ):
-
-                    clear_session()
-                    gc.collect()
-
-                    # ======================================
-                    # SEED
-                    # ======================================
-                    SEED = 49
-
-                    random.seed(SEED)
-                    np.random.seed(SEED)
-                    tf.random.set_seed(SEED)
-
-                    # ======================================
-                    # PARAMETER
-                    # ======================================
-                    GS_epoch = 50
-                    GS_batch = 32
-                    GS_units = 50
-                    GS_dropout = 0.2
-                    GS_lr = 0.0001
-
-                    # ======================================
-                    # DATA
-                    # ======================================
-                    values = df[['Terakhir']].values.astype(float)
-
-                    n = len(values)
-
-                    n_train = int(n * 0.8)
-
-                    scaler = MinMaxScaler()
-
-                    scaler.fit(values[:n_train])
-
-                    scaled_data = scaler.transform(values)
-
-                    X = []
-                    y = []
-
-                    for i in range(timestep, len(scaled_data)):
-
-                        X.append(
-                            scaled_data[
-                                i-timestep:i
-                            ]
-                        )
-
-                        y.append(
-                            scaled_data[i]
-                        )
-
-                    X = np.array(X)
-                    y = np.array(y)
-
-                    split_idx = n_train - timestep
-
-                    X_train = X[:split_idx]
-                    y_train = y[:split_idx]
-
-                    X_test = X[split_idx:]
-                    y_test = y[split_idx:]
-
-                    X_train = X_train.reshape(
-                        (
-                            X_train.shape[0],
-                            X_train.shape[1],
-                            1
-                        )
-                    )
-
-                    X_test = X_test.reshape(
-                        (
-                            X_test.shape[0],
-                            X_test.shape[1],
-                            1
-                        )
-                    )
-
-                    # ======================================
-                    # MODEL
-                    # ======================================
-                    model = Sequential()
-
-                    model.add(
-                        Input(
-                            shape=(timestep, 1)
-                        )
-                    )
-
-                    model.add(
-                        GRU(
-                            units=GS_units,
-                            activation='tanh'
-                        )
-                    )
-
-                    model.add(
-                        Dropout(GS_dropout)
-                    )
-
-                    model.add(Dense(1))
-
-                    model.compile(
-                        optimizer=Adam(
-                            learning_rate=GS_lr
-                        ),
-                        loss='mse'
-                    )
-
-                    early_stop = EarlyStopping(
-                        monitor='val_loss',
-                        patience=5,
-                        restore_best_weights=True
-                    )
-
-                    history = model.fit(
-                        X_train,
-                        y_train,
-                        epochs=GS_epoch,
-                        batch_size=GS_batch,
-                        validation_split=0.2,
-                        callbacks=[early_stop],
-                        verbose=1
-                    )
-
-                    # ======================================
-                    # PREDIKSI
-                    # ======================================
-                    y_pred_scaled = model.predict(
-                        X_test,
-                        verbose=0
-                    )
-
-                    y_pred = scaler.inverse_transform(
-                        y_pred_scaled
-                    ).flatten()
-
-                    y_actual = scaler.inverse_transform(
-                        y_test.reshape(-1, 1)
-                    ).flatten()
-
-                    # ======================================
-                    # METRICS
-                    # ======================================
-                    rmse = np.sqrt(
-                        mean_squared_error(
-                            y_actual,
-                            y_pred
-                        )
-                    )
-
-                    mae = mean_absolute_error(
-                        y_actual,
-                        y_pred
-                    )
-
-                    mape = (
-                        mean_absolute_percentage_error(
-                            y_actual,
-                            y_pred
-                        ) * 100
-                    )
-
-                    # ======================================
-                    # HASIL
-                    # ======================================
-                    col1, col2, col3 = st.columns(3)
-
-                    col1.metric(
-                        "RMSE",
-                        f"Rp {rmse:,.2f}"
-                    )
-
-                    col2.metric(
-                        "MAE",
-                        f"Rp {mae:,.2f}"
-                    )
-
-                    col3.metric(
-                        "MAPE",
-                        f"{mape:.4f}%"
-                    )
-
-                    # ======================================
-                    # LOSS
-                    # ======================================
-                    st.subheader(
-                        "📉 Training vs Validation Loss"
-                    )
-
-                    fig1, ax1 = plt.subplots(
-                        figsize=(10, 5)
-                    )
-
-                    ax1.plot(
-                        history.history['loss'],
-                        label='Training Loss'
-                    )
-
-                    ax1.plot(
-                        history.history['val_loss'],
-                        label='Validation Loss'
-                    )
-
-                    ax1.legend()
-
-                    ax1.grid(alpha=0.3)
-
-                    st.pyplot(fig1)
-
-                    # ======================================
-                    # AKTUAL VS PREDIKSI
-                    # ======================================
-                    st.subheader(
-                        "📈 Aktual vs Prediksi"
-                    )
-
-                    fig2, ax2 = plt.subplots(
-                        figsize=(12, 6)
-                    )
-
-                    ax2.plot(
-                        y_actual,
-                        label='Aktual'
-                    )
-
-                    ax2.plot(
-                        y_pred,
-                        label='Prediksi'
-                    )
-
-                    ax2.legend()
-
-                    ax2.grid(alpha=0.3)
-
-                    st.pyplot(fig2)
-
-                    st.success(
-                        "Training baseline berhasil!"
-                    )
-
-        # ==================================================
-        # OPTIMASI GRU-PSO
-        # ==================================================
-        elif menu == "Optimasi GRU-PSO":
-
-            st.subheader("🚀 Optimasi GRU-PSO")
-
-            if "Terakhir" not in df.columns:
-
-                st.warning(
-                    "Kolom 'Terakhir' tidak ditemukan."
-                )
-
-            else:
-
-                with st.spinner(
-                    "Proses optimasi GRU-PSO..."
-                ):
-
-                    clear_session()
-                    gc.collect()
-
-                    # ======================================
-                    # SEED
-                    # ======================================
-                    SEED = 49
-
-                    random.seed(SEED)
-                    np.random.seed(SEED)
-                    tf.random.set_seed(SEED)
-
-                    # ======================================
-                    # DATA
-                    # ======================================
-                    values = df[['Terakhir']].values.astype(float)
-
-                    n = len(values)
-
-                    n_train = int(n * 0.8)
-
-                    # ======================================
-                    # SCALING
-                    # ======================================
-                    scaler = MinMaxScaler()
-
-                    scaler.fit(values[:n_train])
-
-                    scaled_data = scaler.transform(values)
-
-                    # ======================================
-                    # WINDOWING
-                    # ======================================
-                    X = []
-                    y = []
-
-                    for i in range(timestep, len(scaled_data)):
-
-                        X.append(
-                            scaled_data[
-                                i-timestep:i
-                            ]
-                        )
-
-                        y.append(
-                            scaled_data[i]
-                        )
-
-                    X = np.array(X)
-                    y = np.array(y)
-
-                    split_idx = n_train - timestep
-
-                    X_train = X[:split_idx]
-                    y_train = y[:split_idx]
-
-                    X_test = X[split_idx:]
-                    y_test = y[split_idx:]
-
-                    X_train = X_train.reshape(
-                        (
-                            X_train.shape[0],
-                            X_train.shape[1],
-                            1
-                        )
-                    )
-
-                    X_test = X_test.reshape(
-                        (
-                            X_test.shape[0],
-                            X_test.shape[1],
-                            1
-                        )
-                    )
-
-                    # ======================================
-                    # VALIDATION
-                    # ======================================
-                    val_size = 0.2
-
-                    train_size = int(
-                        len(X_train) * (1 - val_size)
-                    )
-
-                    X_tr = X_train[:train_size]
-                    y_tr = y_train[:train_size]
-
-                    X_val = X_train[train_size:]
-                    y_val = y_train[train_size:]
-
-                    # ======================================
-                    # OPTIONS PSO
-                    # ======================================
-                    options = {
-                        'c1': 2.0,
-                        'c2': 2.0,
-                        'w': 0.7
-                    }
-
-                    bounds = (
-                        np.array([
-                            units_min,
-                            lr_min,
-                            batch_min,
-                            dropout_min
-                        ]),
-
-                        np.array([
-                            units_max,
-                            lr_max,
-                            batch_max,
-                            dropout_max
+    # Membaca data dengan aman
+    if uploaded_file.name.endswith('.csv'):
+        emas = pd.read_csv(uploaded_file)
+    else:
+        emas = pd.read_excel(uploaded_file)
+        
+    st.success("Data berhasil diunggah!")
+    
+    # ==========================================
+    # 2. PROSES PEMODELAN DIKUNCI DI DALAM CACHE
+    # ==========================================
+    @st.cache_resource
+    def jalankan_pemodelan_pso_gru(_df_emas):
+        # Reset seed tepat sebelum pemrosesan data dimulai
+        reset_seeds()
+        
+        # Penyiapan fitur
+        feature_cols = ["Terakhir"]
+        target_col   = "Terakhir"
+        data_features = _df_emas[feature_cols].values
+        data_target = _df_emas[[target_col]].values
+
+        # Split Data Training dan Testing (80:20)
+        values = _df_emas[['Terakhir']].values
+        n = len(values)
+        n_train = int(n * 0.8)
+        
+        # Data Scaling
+        scaler_X = MinMaxScaler().fit(data_features[:n_train])
+        scaler_y = MinMaxScaler().fit(data_target[:n_train])
+        Xs = scaler_X.transform(data_features)
+        ys = scaler_y.transform(data_target)
+
+        # Fungsi Windowing
+        def make_sequences(X_scaled, y_scaled, window):
+            X_seq, y_seq = [], []
+            for i in range(window, len(X_scaled)):
+                X_seq.append(X_scaled[i-window:i])
+                y_seq.append(y_scaled[i])
+            return np.array(X_seq), np.array(y_seq)
+    
+        # Windowing Data
+        window = 1
+        X_seq_all, y_seq_all = make_sequences(Xs, ys, window)
+        
+        # Split train-test
+        dtrain_end = n_train - window
+        X_train = X_seq_all[:dtrain_end]
+        y_train = y_seq_all[:dtrain_end]
+        X_test = X_seq_all[dtrain_end:]
+        y_test = y_seq_all[dtrain_end:]
+        
+        # Reshape untuk input GRU
+        X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
+        X_test  = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
+        
+        # Split manual 80:20 untuk Train & Validation Internal PSO
+        val_PSOSL = 0.2
+        n_tr_samples_PSOSL = X_train.shape[0]
+        n_tr_val_PSOSL = int(n_tr_samples_PSOSL * (1 - val_PSOSL))
+        
+        X_tr_PSOSL = X_train[:n_tr_val_PSOSL]
+        y_tr_PSOSL = y_train[:n_tr_val_PSOSL]
+        X_val_PSOSL = X_train[n_tr_val_PSOSL:]
+        y_val_PSOSL = y_train[n_tr_val_PSOSL:]
+
+        # Fungsi Fitness PSO
+        def make_pso_obj(X_tr, y_tr, X_va, y_va, scaler_y):
+            def obj_fn(particles):
+                n_particles = particles.shape[0]
+                costs = np.zeros(n_particles)
+                for i, p in enumerate(particles):
+                    units = int(np.round(p[0]))
+                    lr = float(p[1])
+                    batch = int(np.round(p[2]))
+                    dropout = float(p[3])
+                    try:
+                        # PENTING: Kunci seed internal TensorFlow di setiap partikel
+                        tf.random.set_seed(49)
+                        clear_session()
+                        
+                        # Arsitektur GRU
+                        model = Sequential([
+                            Input(shape=(X_tr.shape[1], X_tr.shape[2])),
+                            GRU(units=units, activation='tanh'),
+                            Dropout(dropout),
+                            Dense(1)
                         ])
-                    )
-
-                    # ======================================
-                    # FITNESS FUNCTION
-                    # ======================================
-                    def objective_function(particles):
-
-                        n_particles = particles.shape[0]
-
-                        losses = np.zeros(n_particles)
-
-                        for i, particle_i in enumerate(particles):
-
-                            try:
-
-                                units_p = int(
-                                    np.round(particle_i[0])
-                                )
-
-                                lr_p = float(
-                                    particle_i[1]
-                                )
-
-                                batch_p = int(
-                                    np.round(particle_i[2])
-                                )
-
-                                dropout_p = float(
-                                    particle_i[3]
-                                )
-
-                                units_p = max(1, units_p)
-
-                                batch_p = max(1, batch_p)
-
-                                dropout_p = min(
-                                    max(dropout_p, 0.0),
-                                    0.9
-                                )
-
-                                clear_session()
-
-                                tf.random.set_seed(SEED)
-
-                                # ==============================
-                                # MODEL
-                                # ==============================
-                                model = Sequential()
-
-                                model.add(
-                                    Input(
-                                        shape=(
-                                            timestep,
-                                            1
-                                        )
-                                    )
-                                )
-
-                                for l in range(layer):
-
-                                    if l < layer - 1:
-
-                                        model.add(
-                                            GRU(
-                                                units=units_p,
-                                                activation='tanh',
-                                                return_sequences=True
-                                            )
-                                        )
-
-                                    else:
-
-                                        model.add(
-                                            GRU(
-                                                units=units_p,
-                                                activation='tanh'
-                                            )
-                                        )
-
-                                    model.add(
-                                        Dropout(dropout_p)
-                                    )
-
-                                model.add(Dense(1))
-
-                                model.compile(
-                                    optimizer=Adam(
-                                        learning_rate=lr_p
-                                    ),
-                                    loss='mse'
-                                )
-
-                                early_stop = EarlyStopping(
-                                    monitor='val_loss',
-                                    patience=3,
-                                    restore_best_weights=True
-                                )
-
-                                model.fit(
-                                    X_tr,
-                                    y_tr,
-                                    epochs=10,
-                                    batch_size=batch_p,
-                                    validation_data=(
-                                        X_val,
-                                        y_val
-                                    ),
-                                    callbacks=[early_stop],
-                                    verbose=0
-                                )
-
-                                pred = model.predict(
-                                    X_val,
-                                    verbose=0
-                                )
-
-                                pred_inv = scaler.inverse_transform(
-                                    pred
-                                ).flatten()
-
-                                actual_inv = scaler.inverse_transform(
-                                    y_val.reshape(-1, 1)
-                                ).flatten()
-
-                                mse = mean_squared_error(
-                                    actual_inv,
-                                    pred_inv
-                                )
-
-                                losses[i] = mse
-
-                                clear_session()
-                                gc.collect()
-
-                            except Exception as e:
-
-                                print("ERROR :", e)
-
-                                losses[i] = 1e12
-
-                        return losses
-
-                    # ======================================
-                    # OPTIMIZER
-                    # ======================================
-                    optimizer = ps.single.GlobalBestPSO(
-                        n_particles=particle,
-                        dimensions=4,
-                        options=options,
-                        bounds=bounds
-                    )
-
-                    best_cost, best_pos = optimizer.optimize(
-                        objective_function,
-                        iters=iterasi
-                    )
-
-                    # ======================================
-                    # BEST PARAMETER
-                    # ======================================
-                    best_units = int(
-                        np.round(best_pos[0])
-                    )
-
-                    best_lr = float(best_pos[1])
-
-                    best_batch = int(
-                        np.round(best_pos[2])
-                    )
-
-                    best_dropout = float(
-                        best_pos[3]
-                    )
-
-                    # ======================================
-                    # FINAL MODEL
-                    # ======================================
+                        model.compile(optimizer=Adam(learning_rate=lr), loss='mse')
+                        model.fit(X_tr, y_tr, epochs=10, batch_size=batch, verbose=0)
+            
+                        yv_pred = model.predict(X_va, verbose=0)
+                        yv_pred_orig_PSOSL = scaler_y.inverse_transform(yv_pred).flatten()
+                        yv_true_orig_PSOSL = scaler_y.inverse_transform(y_va.reshape(-1, 1)).flatten()
+                        costs[i] = mean_squared_error(yv_true_orig_PSOSL, yv_pred_orig_PSOSL)
+                    except Exception as e:
+                        costs[i] = 1e12
                     clear_session()
+                    gc.collect()
+                return costs
+            return obj_fn
+            
+        pso_obj_PSOSL = make_pso_obj(X_tr_PSOSL, y_tr_PSOSL, X_val_PSOSL, y_val_PSOSL, scaler_y)
 
-                    tf.random.set_seed(SEED)
+        # Konfigurasi & Inisialisasi PSO
+        PSOSL_iters = 1
+        optimizer = GlobalBestPSO(
+            n_particles=40, dimensions=4,
+            options={'c1': 2.0, 'c2': 2.0, 'w': 0.7},
+            bounds=([16, 0.0001, 16, 0.01], [128, 0.01, 128, 0.5])
+        )
+        
+        n_particles, dims = optimizer.swarm.position.shape
+        optimizer.swarm.pbest_pos_PSOSL = optimizer.swarm.position.copy()
+        optimizer.swarm.pbest_cost_PSOSL = np.full(n_particles, np.inf)
+        
+        history_gbest_cost_PSOSL = []
+        history_gbest_pos_PSOSL = []
+        
+        # Loop PSO Utama
+        for it in range(PSOSL_iters):
+            costs_PSOSL = pso_obj_PSOSL(optimizer.swarm.position)
+            
+            mask_PSOSL = costs_PSOSL < optimizer.swarm.pbest_cost_PSOSL
+            optimizer.swarm.pbest_cost_PSOSL[mask_PSOSL] = costs_PSOSL[mask_PSOSL]
+            optimizer.swarm.pbest_pos_PSOSL[mask_PSOSL] = optimizer.swarm.position[mask_PSOSL].copy()
+            
+            best_PSOSL = np.argmin(optimizer.swarm.pbest_cost_PSOSL)
+            optimizer.swarm.best_cost_PSOSL = optimizer.swarm.pbest_cost_PSOSL[best_PSOSL]
+            optimizer.swarm.best_pos_PSOSL = optimizer.swarm.pbest_pos_PSOSL[best_PSOSL].copy()
+            
+            history_gbest_cost_PSOSL.append(float(optimizer.swarm.best_cost_PSOSL))
+            history_gbest_pos_PSOSL.append(optimizer.swarm.best_pos_PSOSL.copy())
+            
+            # Update acak disinkronkan dengan Colab
+            r1 = np.random.rand(*optimizer.swarm.position.shape)
+            r2 = np.random.rand(*optimizer.swarm.position.shape)
+            optimizer.swarm.velocity = (
+                0.7 * optimizer.swarm.velocity
+                + 2.0 * r1 * (optimizer.swarm.pbest_pos_PSOSL - optimizer.swarm.position)
+                + 2.0 * r2 * (optimizer.swarm.best_pos_PSOSL - optimizer.swarm.position)
+            )
+            optimizer.swarm.position += optimizer.swarm.velocity
+            optimizer.swarm.position = np.clip(optimizer.swarm.position, np.array([16, 0.0001, 16, 0.01]), np.array([128, 0.01, 128, 0.5]))
 
-                    model_final = Sequential()
+        # Ambil Hyperparameter Terbaik
+        best_pos_PSOSL = history_gbest_pos_PSOSL[-1]
+        best_units_PSOSL = int(np.round(best_pos_PSOSL[0]))
+        best_lr_PSOSL = float(best_pos_PSOSL[1])
+        best_batch_PSOSL = int(np.round(best_pos_PSOSL[2]))
+        best_dropout_PSOSL = float(best_pos_PSOSL[3])
 
-                    model_final.add(
-                        Input(
-                            shape=(
-                                timestep,
-                                1
-                            )
-                        )
-                    )
+        # ========================================================
+        # RETRAINING MODEL FINAL (SAMA DENGAN COLAB)
+        # ========================================================
+        tf.random.set_seed(49)
+        GRU_PSOSL = Sequential([
+            Input(shape=(X_train.shape[1], X_train.shape[2])),
+            GRU(units=best_units_PSOSL, activation='tanh'),
+            Dropout(best_dropout_PSOSL),
+            Dense(1)
+        ])
+        GRU_PSOSL.compile(optimizer=Adam(learning_rate=best_lr_PSOSL), loss='mse')
+        
+        # PERBAIKAN: Parameter shuffle=False dihapus agar default (shuffle=True) sesuai Colab
+        history_final = GRU_PSOSL.fit(
+            X_train, y_train, 
+            epochs=50, 
+            batch_size=best_batch_PSOSL, 
+            validation_split=0.2, 
+            verbose=1
+        )
+        
+        # Evaluasi Akhir Test
+        y_pred_PSOSL = GRU_PSOSL.predict(X_test, verbose=0)
+        y_pred_orig_PSOSL = scaler_y.inverse_transform(y_pred_PSOSL).flatten()
+        y_test_orig_PSOSL = scaler_y.inverse_transform(y_test.reshape(-1, 1)).flatten()
+        
+        rmse_PSOSL = np.sqrt(mean_squared_error(y_test_orig_PSOSL, y_pred_orig_PSOSL))
+        mae_PSOSL = mean_absolute_error(y_test_orig_PSOSL, y_pred_orig_PSOSL)
+        mape_PSOSL = mean_absolute_percentage_error(y_test_orig_PSOSL, y_pred_orig_PSOSL) * 100
 
-                    for l in range(layer):
-
-                        if l < layer - 1:
-
-                            model_final.add(
-                                GRU(
-                                    units=best_units,
-                                    activation='tanh',
-                                    return_sequences=True
-                                )
-                            )
-
-                        else:
-
-                            model_final.add(
-                                GRU(
-                                    units=best_units,
-                                    activation='tanh'
-                                )
-                            )
-
-                        model_final.add(
-                            Dropout(best_dropout)
-                        )
-
-                    model_final.add(Dense(1))
-
-                    model_final.compile(
-                        optimizer=Adam(
-                            learning_rate=best_lr
-                        ),
-                        loss='mse'
-                    )
-
-                    early_stop_final = EarlyStopping(
-                        monitor='val_loss',
-                        patience=5,
-                        restore_best_weights=True
-                    )
-
-                    history = model_final.fit(
-                        X_train,
-                        y_train,
-                        epochs=epoch,
-                        batch_size=best_batch,
-                        validation_split=0.2,
-                        callbacks=[early_stop_final],
-                        verbose=1
-                    )
-
-                    # ======================================
-                    # PREDIKSI
-                    # ======================================
-                    y_pred_scaled = model_final.predict(
-                        X_test,
-                        verbose=0
-                    )
-
-                    y_pred = scaler.inverse_transform(
-                        y_pred_scaled
-                    ).flatten()
-
-                    y_actual = scaler.inverse_transform(
-                        y_test.reshape(-1, 1)
-                    ).flatten()
-
-                    # ======================================
-                    # METRICS
-                    # ======================================
-                    rmse = np.sqrt(
-                        mean_squared_error(
-                            y_actual,
-                            y_pred
-                        )
-                    )
-
-                    mae = mean_absolute_error(
-                        y_actual,
-                        y_pred
-                    )
-
-                    mape = (
-                        mean_absolute_percentage_error(
-                            y_actual,
-                            y_pred
-                        ) * 100
-                    )
-
-                    # ======================================
-                    # BEST PARAMETER
-                    # ======================================
-                    st.subheader(
-                        "🏆 Best Hyperparameter"
-                    )
-
-                    best_df = pd.DataFrame({
-
-                        "Units":
-                        [best_units],
-
-                        "Learning Rate":
-                        [best_lr],
-
-                        "Batch Size":
-                        [best_batch],
-
-                        "Dropout":
-                        [best_dropout],
-
-                        "Layer":
-                        [layer]
-                    })
-
-                    st.dataframe(
-                        best_df,
-                        use_container_width=True
-                    )
-
-                    # ======================================
-                    # METRICS
-                    # ======================================
-                    col1, col2, col3 = st.columns(3)
-
-                    col1.metric(
-                        "RMSE",
-                        f"Rp {rmse:,.2f}"
-                    )
-
-                    col2.metric(
-                        "MAE",
-                        f"Rp {mae:,.2f}"
-                    )
-
-                    col3.metric(
-                        "MAPE",
-                        f"{mape:.4f}%"
-                    )
-
-                    # ======================================
-                    # KONVERGENSI
-                    # ======================================
-                    st.subheader(
-                        "📉 Grafik Konvergensi PSO"
-                    )
-
-                    fig1, ax1 = plt.subplots(
-                        figsize=(10, 5)
-                    )
-
-                    ax1.plot(
-                        optimizer.cost_history,
-                        marker='o'
-                    )
-
-                    ax1.set_xlabel("Iterasi")
-
-                    ax1.set_ylabel("Best MSE")
-
-                    ax1.grid(alpha=0.3)
-
-                    st.pyplot(fig1)
-
-                    # ======================================
-                    # LOSS
-                    # ======================================
-                    st.subheader(
-                        "📉 Training vs Validation Loss"
-                    )
-
-                    fig2, ax2 = plt.subplots(
-                        figsize=(10, 5)
-                    )
-
-                    ax2.plot(
-                        history.history['loss'],
-                        label='Training Loss'
-                    )
-
-                    ax2.plot(
-                        history.history['val_loss'],
-                        label='Validation Loss'
-                    )
-
-                    ax2.legend()
-
-                    ax2.grid(alpha=0.3)
-
-                    st.pyplot(fig2)
-
-                    # ======================================
-                    # AKTUAL VS PREDIKSI
-                    # ======================================
-                    st.subheader(
-                        "📈 Aktual vs Prediksi"
-                    )
-
-                    fig3, ax3 = plt.subplots(
-                        figsize=(12, 6)
-                    )
-
-                    ax3.plot(
-                        y_actual,
-                        label='Aktual'
-                    )
-
-                    ax3.plot(
-                        y_pred,
-                        label='Prediksi'
-                    )
-
-                    ax3.legend()
-
-                    ax3.grid(alpha=0.3)
-
-                    st.pyplot(fig3)
-
-                    st.success(
-                        "Optimasi GRU-PSO berhasil!"
-                    )
-
-    except Exception as e:
-
-        st.error(
-            f"❌ Terjadi error: {e}"
+        return (
+            best_units_PSOSL,
+            best_lr_PSOSL,
+            best_batch_PSOSL,
+            best_dropout_PSOSL,
+            rmse_PSOSL,
+            mae_PSOSL,
+            mape_PSOSL,
+            y_test_orig_PSOSL,
+            y_pred_orig_PSOSL
         )
 
-else:
+    # Tombol pemicu eksekusi
+    if st.button("Mulai Optimasi & Prediksi (Proses Berat)"):
+        with st.spinner("Sedang menghitung GRU-PSO... Mohon tunggu."):
+            units, lr, batch, dropout, rmse, mae, mape, y_true_plot, y_pred_plot = jalankan_pemodelan_pso_gru(emas)
+            
+        st.success("Proses Selesai!")
+        
+        # Tampilkan Parameter Terbaik ke Interface Web
+        st.subheader("Hyperparameter Terbaik yang Ditemukan:")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Units", units)
+        col2.metric("Learning Rate", f"{lr:.6f}")
+        col3.metric("Batch Size", batch)
+        col4.metric("Dropout", f"{dropout:.4f}")
+        
+        # Tampilkan Hasil Evaluasi Metrik
+        st.subheader("Hasil Evaluasi Data Testing:")
+        res_df = pd.DataFrame([{
+            'RMSE (Rp)': round(rmse, 2),
+            'MAE (Rp)': round(mae, 2),
+            'MAPE (%)': round(mape, 4)
+        }])
+        st.dataframe(res_df)
 
-    st.info(
-        "📂 Silakan upload file Excel terlebih dahulu."
-    )
+        # Plot Hasil Prediksi ke Layar Web
+        fig, ax = plt.subplots(figsize=(12, 5))
+        ax.plot(y_true_plot, label='Harga Aktual', color='royalblue')
+        ax.plot(y_pred_plot, label='Harga Prediksi', color='crimson', linestyle='--')
+        ax.set_title("Perbandingan Harga Aktual vs Prediksi (Emas)")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        st.pyplot(fig)
