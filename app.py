@@ -188,8 +188,8 @@ if uploaded_file is not None:
             [128, 0.01, 128, 0.5]
         )
 
-        reference_particles = 18
-        reference_iters = 5
+        reference_particles = 20
+        reference_iters = 10
         reference_window = 1
 
         use_reference_cache = (
