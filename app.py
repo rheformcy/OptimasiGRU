@@ -206,15 +206,21 @@ if uploaded_file is not None:
     st.header("Windowing Data")
 
     def make_sequences(X_scaled, y_scaled, window):
+
         X_seq, y_seq = [], []
 
         for i in range(window, len(X_scaled)):
+
             X_seq.append(X_scaled[i-window:i])
             y_seq.append(y_scaled[i])
 
         return np.array(X_seq), np.array(y_seq)
 
-    X_seq_all, y_seq_all = make_sequences(Xs, ys, window=window)
+    X_seq_all, y_seq_all = make_sequences(
+        Xs,
+        ys,
+        window=window
+    )
 
     dtrain_end = n_train - window
 
@@ -224,8 +230,13 @@ if uploaded_file is not None:
     X_test = X_seq_all[dtrain_end:]
     y_test = y_seq_all[dtrain_end:]
 
-    X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
-    X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
+    X_train = X_train.reshape(
+        (X_train.shape[0], X_train.shape[1], 1)
+    )
+
+    X_test = X_test.reshape(
+        (X_test.shape[0], X_test.shape[1], 1)
+    )
 
     st.write(f"Shape X_train: {X_train.shape}")
     st.write(f"Shape X_test: {X_test.shape}")
@@ -246,7 +257,7 @@ if uploaded_file is not None:
             )
 
             # =====================================================
-            # KONDISI KONFIGURASI REFERENSI
+            # REFERENCE CONFIG
             # =====================================================
             reference_bounds = (
                 [16, 0.0001, 16, 0.01],
@@ -263,10 +274,16 @@ if uploaded_file is not None:
                 and PSOSL_iters == reference_iters
             )
 
+            # =====================================================
+            # VALIDATION SPLIT
+            # =====================================================
             val_PSOSL = 0.2
 
             n_tr_samples_PSOSL = X_train.shape[0]
-            n_tr_val_PSOSL = int(n_tr_samples_PSOSL * (1 - val_PSOSL))
+
+            n_tr_val_PSOSL = int(
+                n_tr_samples_PSOSL * (1 - val_PSOSL)
+            )
 
             X_tr_PSOSL = X_train[:n_tr_val_PSOSL]
             y_tr_PSOSL = y_train[:n_tr_val_PSOSL]
@@ -280,11 +297,18 @@ if uploaded_file is not None:
             # =====================================================
             # FITNESS FUNCTION
             # =====================================================
-            def make_pso_obj(X_tr, y_tr, X_va, y_va, scaler_y):
+            def make_pso_obj(
+                X_tr,
+                y_tr,
+                X_va,
+                y_va,
+                scaler_y
+            ):
 
                 def obj_fn(particles):
 
                     n_particles = particles.shape[0]
+
                     costs = np.zeros(n_particles)
 
                     for i, p in enumerate(particles):
@@ -302,7 +326,13 @@ if uploaded_file is not None:
                             clear_session()
 
                             model = Sequential([
-                                Input(shape=(X_tr.shape[1], X_tr.shape[2])),
+
+                                Input(
+                                    shape=(
+                                        X_tr.shape[1],
+                                        X_tr.shape[2]
+                                    )
+                                ),
 
                                 GRU(
                                     units=units,
@@ -312,10 +342,13 @@ if uploaded_file is not None:
                                 Dropout(dropout),
 
                                 Dense(1)
+
                             ])
 
                             model.compile(
-                                optimizer=Adam(learning_rate=lr),
+                                optimizer=Adam(
+                                    learning_rate=lr
+                                ),
                                 loss='mse'
                             )
 
@@ -332,13 +365,17 @@ if uploaded_file is not None:
                                 verbose=0
                             )
 
-                            yv_pred_orig = scaler_y.inverse_transform(
-                                yv_pred
-                            ).flatten()
+                            yv_pred_orig = (
+                                scaler_y.inverse_transform(
+                                    yv_pred
+                                ).flatten()
+                            )
 
-                            yv_true_orig = scaler_y.inverse_transform(
-                                y_va.reshape(-1, 1)
-                            ).flatten()
+                            yv_true_orig = (
+                                scaler_y.inverse_transform(
+                                    y_va.reshape(-1, 1)
+                                ).flatten()
+                            )
 
                             costs[i] = mean_squared_error(
                                 yv_true_orig,
@@ -347,7 +384,10 @@ if uploaded_file is not None:
 
                         except Exception as e:
 
-                            st.write("PSO eval error:", e)
+                            st.write(
+                                "PSO eval error:",
+                                e
+                            )
 
                             costs[i] = 1e12
 
@@ -373,7 +413,9 @@ if uploaded_file is not None:
                 bounds=PSOSL_bounds
             )
 
-            n_particles, dims = optimizer.swarm.position.shape
+            n_particles, dims = (
+                optimizer.swarm.position.shape
+            )
 
             optimizer.swarm.pbest_pos_PSOSL = (
                 optimizer.swarm.position.copy()
@@ -385,598 +427,283 @@ if uploaded_file is not None:
             )
 
             # =====================================================
-            # LOAD REFERENCE STATE
+            # CHECK CACHE FILE
             # =====================================================
-            if use_reference_state:
+            cache_ready = os.path.exists(
+                "pso_cache/pso_reference.npz"
+            )
+
+            # =====================================================
+            # LOAD CACHE
+            # =====================================================
+            if use_reference_state and cache_ready:
 
                 try:
 
-                    ref_position = np.load(
-                        "reference_states/ref_position.npy"
+                    cache_data = np.load(
+                        "pso_cache/pso_reference.npz",
+                        allow_pickle=True
                     )
 
-                    ref_velocity = np.load(
-                        "reference_states/ref_velocity.npy"
+                    history_positions_PSOSL = list(
+                        cache_data['history_positions']
                     )
 
-                    ref_pbest_pos = np.load(
-                        "reference_states/ref_pbest_pos.npy"
+                    history_velocity_PSOSL = list(
+                        cache_data['history_velocity']
                     )
 
-                    ref_pbest_cost = np.load(
-                        "reference_states/ref_pbest_cost.npy"
+                    history_costs_PSOSL = list(
+                        cache_data['history_costs']
                     )
 
-                    optimizer.swarm.position = (
-                        ref_position.copy()
+                    history_gbest_cost_PSOSL = list(
+                        cache_data['history_gbest_cost']
                     )
 
-                    optimizer.swarm.velocity = (
-                        ref_velocity.copy()
+                    history_gbest_pos_PSOSL = list(
+                        cache_data['history_gbest_pos']
                     )
 
-                    optimizer.swarm.pbest_pos_PSOSL = (
-                        ref_pbest_pos.copy()
+                    best_pos_PSOSL = (
+                        cache_data['best_pos']
                     )
 
-                    optimizer.swarm.pbest_cost_PSOSL = (
-                        ref_pbest_cost.copy()
+                    best_cost_PSOSL = float(
+                        cache_data['best_cost']
+                    )
+
+                    best_units_PSOSL = int(
+                        cache_data['best_units']
+                    )
+
+                    best_lr_PSOSL = float(
+                        cache_data['best_lr']
+                    )
+
+                    best_batch_PSOSL = int(
+                        cache_data['best_batch']
+                    )
+
+                    best_dropout_PSOSL = float(
+                        cache_data['best_dropout']
                     )
 
                     st.info(
-                        "Reference swarm state activated."
+                        "Reference PSO cache loaded."
                     )
 
                 except Exception as e:
 
                     st.warning(
-                        f"Reference state gagal dimuat: {e}"
+                        f"Cache gagal dimuat: {e}"
                     )
 
-            history_positions_PSOSL = []
-            history_velocity_PSOSL = []
-            history_costs_PSOSL = []
-            history_gbest_cost_PSOSL = []
-            history_gbest_pos_PSOSL = []
+                    history_positions_PSOSL = []
+                    history_velocity_PSOSL = []
+                    history_costs_PSOSL = []
+                    history_gbest_cost_PSOSL = []
+                    history_gbest_pos_PSOSL = []
 
-            progress_bar = st.progress(0)
+            else:
 
-            iteration_results = []
+                history_positions_PSOSL = []
+                history_velocity_PSOSL = []
+                history_costs_PSOSL = []
+                history_gbest_cost_PSOSL = []
+                history_gbest_pos_PSOSL = []
 
-            # =====================================================
-            # LOOP PSO
-            # =====================================================
-            np.random.seed()
-            random.seed()
-            tf.random.set_seed(49)
+                progress_bar = st.progress(0)
 
-            for it in range(PSOSL_iters):
+                iteration_results = []
 
-                costs_PSOSL = pso_obj_PSOSL(
-                    optimizer.swarm.position
-                )
+                np.random.seed()
+                random.seed()
+                tf.random.set_seed(49)
 
-                mask_PSOSL = (
-                    costs_PSOSL <
-                    optimizer.swarm.pbest_cost_PSOSL
-                )
+                # =====================================================
+                # LOOP PSO
+                # =====================================================
+                for it in range(PSOSL_iters):
 
-                optimizer.swarm.pbest_cost_PSOSL[
-                    mask_PSOSL
-                ] = costs_PSOSL[mask_PSOSL]
+                    costs_PSOSL = pso_obj_PSOSL(
+                        optimizer.swarm.position
+                    )
 
-                optimizer.swarm.pbest_pos_PSOSL[
-                    mask_PSOSL
-                ] = (
-                    optimizer.swarm.position[
-                        mask_PSOSL
-                    ].copy()
-                )
+                    mask_PSOSL = (
+                        costs_PSOSL <
+                        optimizer.swarm.pbest_cost_PSOSL
+                    )
 
-                best_PSOSL = np.argmin(
-                    optimizer.swarm.pbest_cost_PSOSL
-                )
-
-                optimizer.swarm.best_cost_PSOSL = (
                     optimizer.swarm.pbest_cost_PSOSL[
-                        best_PSOSL
-                    ]
-                )
+                        mask_PSOSL
+                    ] = costs_PSOSL[mask_PSOSL]
 
-                optimizer.swarm.best_pos_PSOSL = (
                     optimizer.swarm.pbest_pos_PSOSL[
-                        best_PSOSL
-                    ].copy()
-                )
-
-                history_positions_PSOSL.append(
-                    optimizer.swarm.position.copy()
-                )
-
-                history_velocity_PSOSL.append(
-                    optimizer.swarm.velocity.copy()
-                )
-
-                history_costs_PSOSL.append(
-                    costs_PSOSL.copy()
-                )
-
-                history_gbest_cost_PSOSL.append(
-                    float(
-                        optimizer.swarm.best_cost_PSOSL
+                        mask_PSOSL
+                    ] = (
+                        optimizer.swarm.position[
+                            mask_PSOSL
+                        ].copy()
                     )
-                )
 
-                history_gbest_pos_PSOSL.append(
-                    optimizer.swarm.best_pos_PSOSL.copy()
-                )
+                    best_PSOSL = np.argmin(
+                        optimizer.swarm.pbest_cost_PSOSL
+                    )
 
-                current_result = {
-                    'Iterasi': it + 1,
-                    'Best Loss': optimizer.swarm.best_cost_PSOSL,
-                    'Units': int(
-                        np.round(
-                            optimizer.swarm.best_pos_PSOSL[0]
+                    optimizer.swarm.best_cost_PSOSL = (
+                        optimizer.swarm.pbest_cost_PSOSL[
+                            best_PSOSL
+                        ]
+                    )
+
+                    optimizer.swarm.best_pos_PSOSL = (
+                        optimizer.swarm.pbest_pos_PSOSL[
+                            best_PSOSL
+                        ].copy()
+                    )
+
+                    history_positions_PSOSL.append(
+                        optimizer.swarm.position.copy()
+                    )
+
+                    history_velocity_PSOSL.append(
+                        optimizer.swarm.velocity.copy()
+                    )
+
+                    history_costs_PSOSL.append(
+                        costs_PSOSL.copy()
+                    )
+
+                    history_gbest_cost_PSOSL.append(
+                        float(
+                            optimizer.swarm.best_cost_PSOSL
                         )
-                    ),
-                    'Learning Rate':
-                        optimizer.swarm.best_pos_PSOSL[1],
-                    'Batch Size': int(
-                        np.round(
-                            optimizer.swarm.best_pos_PSOSL[2]
+                    )
+
+                    history_gbest_pos_PSOSL.append(
+                        optimizer.swarm.best_pos_PSOSL.copy()
+                    )
+
+                    r1 = np.random.rand(
+                        *optimizer.swarm.position.shape
+                    )
+
+                    r2 = np.random.rand(
+                        *optimizer.swarm.position.shape
+                    )
+
+                    optimizer.swarm.velocity = (
+
+                        PSOSL_options['w']
+                        * optimizer.swarm.velocity
+
+                        + PSOSL_options['c1']
+                        * r1
+                        * (
+                            optimizer.swarm.pbest_pos_PSOSL
+                            - optimizer.swarm.position
                         )
-                    ),
-                    'Dropout':
-                        optimizer.swarm.best_pos_PSOSL[3]
-                }
 
-                iteration_results.append(
-                    current_result
-                )
+                        + PSOSL_options['c2']
+                        * r2
+                        * (
+                            optimizer.swarm.best_pos_PSOSL
+                            - optimizer.swarm.position
+                        )
 
-                r1 = np.random.rand(
-                    *optimizer.swarm.position.shape
-                )
-
-                r2 = np.random.rand(
-                    *optimizer.swarm.position.shape
-                )
-
-                optimizer.swarm.velocity = (
-                    PSOSL_options['w']
-                    * optimizer.swarm.velocity
-
-                    + PSOSL_options['c1']
-                    * r1
-                    * (
-                        optimizer.swarm.pbest_pos_PSOSL
-                        - optimizer.swarm.position
                     )
 
-                    + PSOSL_options['c2']
-                    * r2
-                    * (
-                        optimizer.swarm.best_pos_PSOSL
-                        - optimizer.swarm.position
+                    optimizer.swarm.position += (
+                        optimizer.swarm.velocity
                     )
+
+                    lb, ub = (
+                        np.array(PSOSL_bounds[0]),
+                        np.array(PSOSL_bounds[1])
+                    )
+
+                    optimizer.swarm.position = np.clip(
+                        optimizer.swarm.position,
+                        lb,
+                        ub
+                    )
+
+                    progress_bar.progress(
+                        (it + 1) / PSOSL_iters
+                    )
+
+                # =====================================================
+                # BEST PARAMETER
+                # =====================================================
+                best_pos_PSOSL = (
+                    history_gbest_pos_PSOSL[-1]
                 )
 
-                optimizer.swarm.position += (
-                    optimizer.swarm.velocity
+                best_cost_PSOSL = (
+                    history_gbest_cost_PSOSL[-1]
                 )
 
-                lb, ub = (
-                    np.array(PSOSL_bounds[0]),
-                    np.array(PSOSL_bounds[1])
+                best_units_PSOSL = int(
+                    np.round(best_pos_PSOSL[0])
                 )
 
-                optimizer.swarm.position = np.clip(
-                    optimizer.swarm.position,
-                    lb,
-                    ub
+                best_lr_PSOSL = float(
+                    best_pos_PSOSL[1]
+                )
+
+                best_batch_PSOSL = int(
+                    np.round(best_pos_PSOSL[2])
+                )
+
+                best_dropout_PSOSL = float(
+                    best_pos_PSOSL[3]
                 )
 
                 # =====================================================
-                # SAVE SWARM STATE
+                # SAVE CACHE
                 # =====================================================
                 os.makedirs(
-                    "reference_states",
+                    "pso_cache",
                     exist_ok=True
                 )
 
-                np.save(
-                    "reference_states/ref_position.npy",
-                    optimizer.swarm.position
+                np.savez(
+                    "pso_cache/pso_reference.npz",
+
+                    history_positions=np.array(
+                        history_positions_PSOSL,
+                        dtype=object
+                    ),
+
+                    history_velocity=np.array(
+                        history_velocity_PSOSL,
+                        dtype=object
+                    ),
+
+                    history_costs=np.array(
+                        history_costs_PSOSL,
+                        dtype=object
+                    ),
+
+                    history_gbest_cost=np.array(
+                        history_gbest_cost_PSOSL
+                    ),
+
+                    history_gbest_pos=np.array(
+                        history_gbest_pos_PSOSL,
+                        dtype=object
+                    ),
+
+                    best_pos=best_pos_PSOSL,
+                    best_cost=best_cost_PSOSL,
+
+                    best_units=best_units_PSOSL,
+                    best_lr=best_lr_PSOSL,
+                    best_batch=best_batch_PSOSL,
+                    best_dropout=best_dropout_PSOSL
                 )
 
-                np.save(
-                    "reference_states/ref_velocity.npy",
-                    optimizer.swarm.velocity
+                st.success(
+                    "PSO cache berhasil disimpan"
                 )
-
-                np.save(
-                    "reference_states/ref_pbest_pos.npy",
-                    optimizer.swarm.pbest_pos_PSOSL
-                )
-
-                np.save(
-                    "reference_states/ref_pbest_cost.npy",
-                    optimizer.swarm.pbest_cost_PSOSL
-                )
-
-                progress_bar.progress(
-                    (it + 1) / PSOSL_iters
-                )
-
-            st.subheader("Hasil Iterasi PSO")
-
-            st.dataframe(
-                pd.DataFrame(iteration_results)
-            )
-
-            # =====================================================
-            # BEST PARAMETER
-            # =====================================================
-            best_pos_PSOSL = (
-                history_gbest_pos_PSOSL[-1]
-            )
-
-            best_cost_PSOSL = (
-                history_gbest_cost_PSOSL[-1]
-            )
-
-            best_units_PSOSL = int(
-                np.round(best_pos_PSOSL[0])
-            )
-
-            best_lr_PSOSL = float(
-                best_pos_PSOSL[1]
-            )
-
-            best_batch_PSOSL = int(
-                np.round(best_pos_PSOSL[2])
-            )
-
-            best_dropout_PSOSL = float(
-                best_pos_PSOSL[3]
-            )
-
-            best_epochs_PSOSL = 50
-
-            st.success("PSO Finished")
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            col1.metric(
-                "Units",
-                best_units_PSOSL
-            )
-
-            col2.metric(
-                "Learning Rate",
-                round(best_lr_PSOSL, 6)
-            )
-
-            col3.metric(
-                "Batch Size",
-                best_batch_PSOSL
-            )
-
-            col4.metric(
-                "Dropout",
-                round(best_dropout_PSOSL, 4)
-            )
-
-            # =====================================================
-            # FINAL TRAINING
-            # =====================================================
-            np.random.seed(49)
-
-            GRU_PSOSL = Sequential([
-
-                Input(
-                    shape=(
-                        X_train.shape[1],
-                        X_train.shape[2]
-                    )
-                ),
-
-                GRU(
-                    units=best_units_PSOSL,
-                    activation='tanh'
-                ),
-
-                Dropout(
-                    best_dropout_PSOSL
-                ),
-
-                Dense(1)
-            ])
-
-            GRU_PSOSL.compile(
-                optimizer=Adam(
-                    learning_rate=best_lr_PSOSL
-                ),
-                loss='mse'
-            )
-
-            early_stop = EarlyStopping(
-                monitor='val_loss',
-                patience=7,
-                restore_best_weights=True
-            )
-
-            history_final = GRU_PSOSL.fit(
-                X_train,
-                y_train,
-                epochs=50,
-                batch_size=best_batch_PSOSL,
-                validation_split=0.2,
-                callbacks=[early_stop],
-                verbose=1
-            )
-
-            os.makedirs(
-                "saved_models",
-                exist_ok=True
-            )
-
-            model_path = (
-                "saved_models/best_model_gru_pso.h5"
-            )
-
-            GRU_PSOSL.save(model_path)
-
-            # =====================================================
-            # GRAFIK KONVERGENSI
-            # =====================================================
-            st.header(
-                "Grafik Konvergensi GRU-PSO"
-            )
-
-            gbest_loss_PSOSL = np.array(
-                history_gbest_cost_PSOSL
-            )
-
-            iterations_PSOSL = np.arange(
-                1,
-                len(gbest_loss_PSOSL) + 1
-            )
-
-            fig_conv = plt.figure(
-                figsize=(8, 5)
-            )
-
-            plt.plot(
-                iterations_PSOSL,
-                gbest_loss_PSOSL,
-                marker='o'
-            )
-
-            plt.xlabel("Iterasi")
-
-            plt.ylabel(
-                "Global Best Loss (MSE)"
-            )
-
-            plt.title(
-                "Grafik Konvergensi GRU-PSO"
-            )
-
-            plt.grid(True)
-
-            st.pyplot(fig_conv)
-
-            # =====================================================
-            # GRAFIK LOSS
-            # =====================================================
-            st.header("Grafik Loss GRU-PSO")
-
-            fig_loss = plt.figure(
-                figsize=(10, 5)
-            )
-
-            plt.plot(
-                history_final.history['loss'],
-                label='Training Loss'
-            )
-
-            plt.plot(
-                history_final.history['val_loss'],
-                label='Validation Loss'
-            )
-
-            plt.title(
-                'Grafik Loss Model GRU-PSO'
-            )
-
-            plt.xlabel('Epoch')
-
-            plt.ylabel('Loss (MSE)')
-
-            plt.legend()
-
-            plt.grid(True)
-
-            st.pyplot(fig_loss)
-
-            # =====================================================
-            # EVALUATION
-            # =====================================================
-            st.header("Evaluasi Model")
-
-            y_pred_PSOSL = GRU_PSOSL.predict(
-                X_test
-            )
-
-            y_pred_PSOSL = (
-                scaler_y.inverse_transform(
-                    y_pred_PSOSL
-                ).flatten()
-            )
-
-            y_test_PSOSL = (
-                scaler_y.inverse_transform(
-                    y_test.reshape(-1, 1)
-                ).flatten()
-            )
-
-            rmse_PSOSL = np.sqrt(
-                mean_squared_error(
-                    y_test_PSOSL,
-                    y_pred_PSOSL
-                )
-            )
-
-            mae_PSOSL = mean_absolute_error(
-                y_test_PSOSL,
-                y_pred_PSOSL
-            )
-
-            mape_PSOSL = (
-                mean_absolute_percentage_error(
-                    y_test_PSOSL,
-                    y_pred_PSOSL
-                ) * 100
-            )
-
-            train_loss_PSOSL = (
-                history_final.history['loss'][-1]
-            )
-
-            val_loss_PSOSL = (
-                history_final.history['val_loss'][-1]
-            )
-
-            epoch_PSOSL = len(
-                history_final.history['loss']
-            )
-
-            result_entry_PSOSL = {
-                'Time_Step': 1,
-                'Units': best_units_PSOSL,
-                'Layers': 1,
-                'LR': round(
-                    best_lr_PSOSL,
-                    6
-                ),
-                'Train_Loss': round(
-                    train_loss_PSOSL,
-                    8
-                ),
-                'Val_Loss': round(
-                    val_loss_PSOSL,
-                    8
-                ),
-                'RMSE_Rp': round(
-                    rmse_PSOSL,
-                    2
-                ),
-                'MAE_Rp': round(
-                    mae_PSOSL,
-                    2
-                ),
-                'MAPE_%': round(
-                    mape_PSOSL,
-                    4
-                ),
-                'Epoch_Final':
-                    best_epochs_PSOSL
-            }
-
-            df_PSOSL_results = pd.DataFrame([
-                result_entry_PSOSL
-            ])
-
-            st.dataframe(
-                df_PSOSL_results
-            )
-
-            os.makedirs(
-                "results",
-                exist_ok=True
-            )
-
-            result_path = (
-                "results/hasil_gru_pso.csv"
-            )
-
-            df_PSOSL_results.to_csv(
-                result_path,
-                index=False
-            )
-
-            # =====================================================
-            # ACTUAL VS PREDICTED
-            # =====================================================
-            st.header("Actual vs Predicted")
-
-            fig_pred = plt.figure(
-                figsize=(14, 7)
-            )
-
-            plt.plot(
-                y_test_PSOSL,
-                label='Harga Aktual (Emas)',
-                color='royalblue',
-                linewidth=2
-            )
-
-            plt.plot(
-                y_pred_PSOSL,
-                label='Harga Prediksi Model GRU-PSO',
-                color='green',
-                linewidth=2
-            )
-
-            plt.title(
-                'Model GRU-PSO: Aktual vs Prediksi Harga Emas Indonesia (IDR/Gram)',
-                fontsize=14
-            )
-
-            plt.xlabel(
-                'Indeks Waktu (Data Testing)',
-                fontsize=12
-            )
-
-            plt.ylabel(
-                'Harga Emas (Rp)',
-                fontsize=12
-            )
-
-            plt.legend()
-
-            plt.grid(
-                True,
-                alpha=0.2
-            )
-
-            st.pyplot(fig_pred)
-
-            # =====================================================
-            # DOWNLOAD BUTTON
-            # =====================================================
-            with open(result_path, 'rb') as file:
-
-                st.download_button(
-                    label='Download Hasil CSV',
-                    data=file,
-                    file_name='hasil_gru_pso.csv',
-                    mime='text/csv'
-                )
-
-            with open(model_path, 'rb') as file:
-
-                st.download_button(
-                    label='Download Model H5',
-                    data=file,
-                    file_name='best_model_gru_pso.h5',
-                    mime='application/octet-stream'
-                )
-
-else:
-
-    st.info(
-        "Silakan upload dataset terlebih dahulu."
-    )
-
