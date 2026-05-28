@@ -337,7 +337,6 @@ if uploaded_file is not None:
                 list(PSOSL_bounds[0]) == list(reference_bounds[0])
                 and list(PSOSL_bounds[1]) == list(reference_bounds[1])
                 and PSOSL_particles == reference_particles
-                and PSOSL_iters == reference_iters
             )
 
             val_PSOSL = 0.2
