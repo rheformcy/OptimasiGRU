@@ -98,31 +98,26 @@ if uploaded_file is not None:
     X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
 
     # =====================================================
-    # TRAIN BUTTON
+    # SAFE COMPARISON (FIXED)
     # =====================================================
-    if st.button("Train / Replay PSO"):
-
-        # =====================================================
-        # CACHE LOAD
-        # =====================================================
-        cache_path = "pso_cache/pso_reference.npz"
-
-        reference_bounds = (
-            [16, 0.0001, 16, 0.01],
-            [128, 0.01, 128, 0.5]
-        )
-        reference_particles = 18
-        reference_window = 1
-
-        use_cache = (
-            os.path.exists(cache_path)
-            and window == reference_window
-            and PSOSL_particles == reference_particles
-            and list(PSOSL_bounds := (
-                [units_min, lr_min, batch_min, dropout_min],
-                [units_max, lr_max, batch_max, dropout_max]
-            )) == list(reference_bounds)
-        )
+    
+    def is_close(a, b, tol=1e-9):
+        return abs(float(a) - float(b)) < tol
+    
+    bounds_current = [
+        [units_min, lr_min, batch_min, dropout_min],
+        [units_max, lr_max, batch_max, dropout_max]
+    ]
+    
+    bounds_ref = reference_bounds
+    
+    use_cache = (
+        os.path.exists(cache_path)
+        and int(window) == int(reference_window)
+        and int(PSOSL_particles) == int(reference_particles)
+        and all(is_close(bounds_current[0][i], bounds_ref[0][i]) for i in range(4))
+        and all(is_close(bounds_current[1][i], bounds_ref[1][i]) for i in range(4))
+    )
 
         cached = None
 
