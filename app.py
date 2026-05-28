@@ -1,7 +1,3 @@
-```python
-# =====================================================
-# IMPORT LIBRARY
-# =====================================================
 import os
 import gc
 import random
@@ -1049,4 +1045,4 @@ else:
     st.info(
         "Silakan upload dataset terlebih dahulu."
     )
-```
+
