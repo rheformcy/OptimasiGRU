@@ -92,6 +92,52 @@ PSOSL_options = {
     'w': w
 }
 
+st.sidebar.subheader("PSO Bounds")
+
+units_min = st.sidebar.number_input(
+    "Units Min",
+    value=16
+)
+
+units_max = st.sidebar.number_input(
+    "Units Max",
+    value=128
+)
+
+lr_min = st.sidebar.number_input(
+    "Learning Rate Min",
+    value=0.0001,
+    format="%.4f"
+)
+
+lr_max = st.sidebar.number_input(
+    "Learning Rate Max",
+    value=0.01,
+    format="%.4f"
+)
+
+batch_min = st.sidebar.number_input(
+    "Batch Size Min",
+    value=16
+)
+
+batch_max = st.sidebar.number_input(
+    "Batch Size Max",
+    value=128
+)
+
+dropout_min = st.sidebar.number_input(
+    "Dropout Min",
+    value=0.01,
+    format="%.2f"
+)
+
+dropout_max = st.sidebar.number_input(
+    "Dropout Max",
+    value=0.5,
+    format="%.2f"
+)
+
 uploaded_file = st.file_uploader(
     "Upload Dataset",
     type=['csv', 'xlsx']
@@ -260,8 +306,18 @@ if uploaded_file is not None:
             # PSO CONFIG
             # =====================================================
             PSOSL_bounds = (
-                [16, 0.0001, 16, 0.01],
-                [128, 0.01, 128, 0.5]
+                [
+                    units_min,
+                    lr_min,
+                    batch_min,
+                    dropout_min
+                ],
+                [
+                    units_max,
+                    lr_max,
+                    batch_max,
+                    dropout_max
+                ]
             )
 
             # =====================================================
